@@ -14,10 +14,14 @@
 #include "util.h"
 #include "../usynth.h"
 
-const signed char sineTable[256] PROGMEM = {0, 3, 6, 9, 12, 16, 19, 22, 25, 28, 31, 34, 37, 40, 43, 46, 49, 51, 54, 57, 60, 63, 65, 68, 71, 73, 76, 78, 81, 83, 85, 88, 90, 92, 94, 96, 98, 100, 102, 104, 106, 107, 109, 111, 112, 113, 115, 116, 117, 118, 120, 121, 122, 122, 123, 124, 125, 125, 126, 126, 126, 127, 127, 127, 127, 127, 127, 127, 126, 126, 126, 125, 125, 124, 123, 122, 122, 121, 120, 118, 117, 116, 115, 113, 112, 111, 109, 107, 106, 104, 102, 100, 98, 96, 94, 92, 90, 88, 85, 83, 81, 78, 76, 73, 71, 68, 65, 63, 60, 57, 54, 51, 49, 46, 43, 40, 37, 34, 31, 28, 25, 22, 19, 16, 12, 9, 6, 3, 0, -3, -6, -9, -12, -16, -19, -22, -25, -28, -31, -34, -37, -40, -43, -46, -49, -51, -54, -57, -60, -63, -65, -68, -71, -73, -76, -78, -81, -83, -85, -88, -90, -92, -94, -96, -98, -100, -102, -104, -106, -107, -109, -111, -112, -113, -115, -116, -117, -118, -120, -121, -122, -122, -123, -124, -125, -125, -126, -126, -126, -127, -127, -127, -127, -127, -127, -127, -126, -126, -126, -125, -125, -124, -123, -122, -122, -121, -120, -118, -117, -116, -115, -113, -112, -111, -109, -107, -106, -104, -102, -100, -98, -96, -94, -92, -90, -88, -85, -83, -81, -78, -76, -73, -71, -68, -65, -63, -60, -57, -54, -51, -49, -46, -43, -40, -37, -34, -31, -28, -25, -22, -19, -16, -12, -9, -6, -3 };
+uint16_t rand();
+
+static voice_t synth;
+static filter_t filter, highpass, dist;
+static const signed char sineTable[256] PROGMEM = {0, 3, 6, 9, 12, 16, 19, 22, 25, 28, 31, 34, 37, 40, 43, 46, 49, 51, 54, 57, 60, 63, 65, 68, 71, 73, 76, 78, 81, 83, 85, 88, 90, 92, 94, 96, 98, 100, 102, 104, 106, 107, 109, 111, 112, 113, 115, 116, 117, 118, 120, 121, 122, 122, 123, 124, 125, 125, 126, 126, 126, 127, 127, 127, 127, 127, 127, 127, 126, 126, 126, 125, 125, 124, 123, 122, 122, 121, 120, 118, 117, 116, 115, 113, 112, 111, 109, 107, 106, 104, 102, 100, 98, 96, 94, 92, 90, 88, 85, 83, 81, 78, 76, 73, 71, 68, 65, 63, 60, 57, 54, 51, 49, 46, 43, 40, 37, 34, 31, 28, 25, 22, 19, 16, 12, 9, 6, 3, 0, -3, -6, -9, -12, -16, -19, -22, -25, -28, -31, -34, -37, -40, -43, -46, -49, -51, -54, -57, -60, -63, -65, -68, -71, -73, -76, -78, -81, -83, -85, -88, -90, -92, -94, -96, -98, -100, -102, -104, -106, -107, -109, -111, -112, -113, -115, -116, -117, -118, -120, -121, -122, -122, -123, -124, -125, -125, -126, -126, -126, -127, -127, -127, -127, -127, -127, -127, -126, -126, -126, -125, -125, -124, -123, -122, -122, -121, -120, -118, -117, -116, -115, -113, -112, -111, -109, -107, -106, -104, -102, -100, -98, -96, -94, -92, -90, -88, -85, -83, -81, -78, -76, -73, -71, -68, -65, -63, -60, -57, -54, -51, -49, -46, -43, -40, -37, -34, -31, -28, -25, -22, -19, -16, -12, -9, -6, -3 };
 
 
-const int note_freq[] PROGMEM = {
+static const int note_freq[] PROGMEM = {
 // c    c#   d   d#    e    f   f#    g    g#   a   a#     b
 	16 , 17,  18 , 20,  21 , 22 , 23,  25 , 26,  28 , 29,  31 , //0	
 	33 , 35,  37 , 39,  41 , 44 , 46,  49 , 52,  55 , 58,  62 ,	//1
@@ -28,44 +32,61 @@ const int note_freq[] PROGMEM = {
 	1047,1109,1175,1245,1319,1397,1475,1568,1661,1760,1865,1976 //6
 };
 
-uint16_t NOTE_INDEX(int note){
+static const uint16_t NOTE_INDEX(int note){
 	return (((note) >= 0 && (note) < 2)?((note) * 2):(((note) >= 2 && (note) < 5)?((note) * 2 - 1):((note) * 2 - 2)));
-}
-
-uint16_t base_freq(int note, int oct){
-	return (pgm_read_word_near(&note_freq[oct * 12 + ((NOTE_INDEX(note) + 9) % 12)]));
-}
-uint16_t sharp_freq(int note, int oct){
-	return (pgm_read_word_near(&note_freq[oct * 12 + ((NOTE_INDEX(note) + 10) % 12)]));
-}
-uint16_t flat_freq(int note, int oct){
-	return (pgm_read_word_near(&note_freq[oct * 12 + ((NOTE_INDEX(note) + 8) % 12)]));
 }
 
 static char _reg[U_REGISTER_COUNT];
 
-voice_t synth;
-
 #define REG(name) *(&_reg[U_##name])
-
+#define MAX(a, b) ((a >= b)?a:b)
 #define SIN(x) ((char)pgm_read_byte_near(&sineTable[x]))
+#define CLAMP(x, min, max) ((x > max)?max:((x < min)?min:x))
 
+static uint16_t DT(uint16_t ui16, uint8_t ui8){
+	//return ui16 >> (ui8 >> 5);
+	return ((ui16 >> (ui8 >> 5)) * CLAMP(32 - (ui8 & 0x1f), 0, 28) >> 2);
+}
 
 /* FILTERS */
-/*
-signed char FI_SimpleLP_Fast(filter_t *fi, signed char sample){
-	fi->acc += ((sample << 7) - fi->acc) * fi->response;
+
+static int FI_SimpleLP_Fast(filter_t *fi, int sample){
+	int high = fi->factor >> 5; // get 3 most signifficant bits
+	if(high > 5) high = 5; // this is necessary to avoid distortions
+	int low = fi->factor & 0x1f; // mask out the 5 least signifficant bits
+	int d = (sample << 7) - fi->acc; // calculate difference (0..32000)
+	int half = ((d >> high) >> 1); 
+	int frac = (half >> 5); 	// calculate 1/32 part of half
+	int rem = (half & 0x1f); 	// save remainder
+	int mul = 32 - low;
+	fi->acc += half + (frac * mul) + (rem * mul); // * (32 - low);
 	return fi->acc >> 7;
 }
 
-signed char FI_SimpleHP_Fast(filter_t *fi, signed char sample){
-	fi->acc += ((sample << 7) - fi->acc) * fi->response;
-	return sample - (fi->acc >> 7);
+static int FI_SimpleHP_Fast(filter_t *fi, int sample){
+	// x = 1/2^2 + 1/2^2*3
+	fi->acc += ((sample << 7) - fi->acc);
+	fi->acc -= (16256 - (sample << 7)) >> 3;
+	return fi->acc;
+	/*int high = 2; //fi->factor >> 5; // get 3 most signifficant bits
+	if(high > 5) high = 5; // this is necessary to avoid distortions
+	int low = 0; //fi->factor & 0x1f; // mask out the 5 least signifficant bits
+	//int d = (sample << 7) - fi->acc; // calculate difference (0..32000)
+	int d = (fi->acc + ((sample - fi->prev_sample) * 128));
+	int half = ((d >> high) >> 1); 
+	int frac = (half >> 5); 	// calculate 1/32 part of half
+	int rem = (half & 0x1f); 	// save remainder
+	int mul = 32 - low;
+	//fi->acc = alpha * (fi->acc + sample - prev_sample);
+    
+	fi->acc = d >> high ;//+ (frac * mul) + (rem * mul); // * (32 - low);
+	fi->prev_sample = sample;
+	return fi->acc >> 7;*/
 }
 
-signed char FI_SimpleLP(filter_t *fi, signed char sample){
+static uint8_t FI_SimpleLP(filter_t *fi, uint8_t sample){
 	if(!fi->initialized){
-		float x = x = exp(-2.0*M_PI*fi->frequency/SAMPLES_PER_SECOND);
+		float x = x = exp(-2.0*M_PI*fi->factor);
 		fi->a0 = 1.0-x;
 		fi->x1 = -x;
 		fi->initialized = 1;
@@ -74,18 +95,18 @@ signed char FI_SimpleLP(filter_t *fi, signed char sample){
 	return fi->acc;
 }
 
-signed char FI_SimpleHP(filter_t *fi, signed char sample){
+static uint8_t FI_SimpleHP(filter_t *fi, uint8_t sample){
 	if(!fi->initialized){
-		float x = x = exp(-2.0*M_PI*fi->frequency/SAMPLES_PER_SECOND);
+		float x = x = exp(-2.0*M_PI*fi->factor);
 		fi->a0 = 1.0-x;
 		fi->x1 = -x;
 		fi->initialized = 1;
 	}
 	fi->acc = fi->a0*sample - fi->x1*fi->acc;
-	return sample - fi->acc;
+	return fi->acc;
 }
 
-signed char FI_Distortion(filter_t *fi, signed char x){
+static uint8_t FI_Distortion(filter_t *fi, uint8_t x){
 	float amount = 0.04; 
 	float in = x; 
 	float k = 2*amount/(1-amount);
@@ -93,7 +114,7 @@ signed char FI_Distortion(filter_t *fi, signed char x){
 	return 127 * (1+k)*in/(1+k*((in >= 0)?in:-in));
 }
 
-signed char FI_Overdrive(filter_t *fi, signed char x){
+static signed char FI_Overdrive(filter_t *fi, signed char x){
 	float a = 0.5;
 	int z = (int)(128 * a) % 256;
 	int s = 128/SIN(z);
@@ -106,47 +127,26 @@ signed char FI_Overdrive(filter_t *fi, signed char x){
 }
 
 // 1 pole low pass filter equation variation #2 optimized for integer math
-signed char FI_1PoleLP(filter_t *fi, signed char sample){
+static signed char FI_1PoleLP(filter_t *fi, signed char sample){
   //((out = (in * (1 - resp)) + (prev * resp);
   //in * 1 - in * resp + prev * resp; 
   fi->acc = (sample << 8) + ((fi->acc - (sample << 8)) * fi->response); 
   return fi->acc >> 8; 
 }
-*/
+
+
 /* Synth functions */
-void VO_Filter(voice_t *vo, filter_t *fi, signed char (*filter)(filter_t *filter, signed char sample)){
-	vo->signal = filter(fi, vo->signal);
-}
 
-void VO_Delay(voice_t *vo, delay_t *dl){
-	dl->buffer_pos++; dl->buffer_pos &= DELAY_BUF_SIZE;
-	dl->buffer[dl->buffer_pos] = vo->signal;
-	vo->signal = dl->buffer[(dl->buffer_pos - dl->delay) & DELAY_BUF_SIZE];
-}
-
-void VO_ApplyEnvelope(voice_t *vo){
-	vo->amplitude_fall 	-= (vo->amplitude_fall >> (vo->decay >> 5)) + (vo->decay & 0xe0);
-	vo->phase_rise 			-= (vo->phase_rise >> vo->attack);
-	vo->amplitude 			= ((max_amp - vo->phase_rise) >> 8) * (vo->amplitude_fall >> 8) ;
-}
-
-#define MAX(a, b) ((a >= b)?a:b)
-
-void OSC_Step(oscillator_t *osc){
-	osc->phase += osc->increment;
-	
-	int wave = 0;
-	unsigned char phase = ((osc->phase >> 8) + osc->phase_offset);
-	switch(osc->waveform) {
+static uint8_t OSC_GenWave(uint8_t waveform, uint8_t phase){
+	switch(waveform) {
 		case WAVE_SINE: 
-			wave = SIN(phase);
-			break;
+			return SIN(phase) + 128;
 		case WAVE_SAW: 
-			wave = (char)(-127+phase);
-			break;
+			//wave = (char)(-127+phase);
+			return phase;
 		case WAVE_SQUARE:
-			wave = ((phase < 128)?-127:127);
-			break;
+			//wave = ((phase < 128)?-127:127);
+			return ((phase < 128)?0:255);
 		case WAVE_TRIANGLE:
 			{
 				int p = phase; 
@@ -155,46 +155,72 @@ void OSC_Step(oscillator_t *osc){
 				// need this cap
 				w = (w > 127)?127:w;
 				w = (w < -127)?-127:w;
-				wave = (w * 2) - 127;
+				return (w * 2); // - 127
 			}
-			break;
 		case WAVE_NOISE:
-			wave = rand();
+			return rand() & 0xff;
 			break;
 		default:
-			wave = 0;
-			break;
+			return 0;
 	}
-	
-	// scale the waveform according to volume and mix with input
-	int8_t res = ((osc->amplitude >> 8) * wave) >> 8;
-	res = ((int16_t)res + (int16_t)osc->input) >> 1;
-	osc->output = res;
+	return 0;
 }
 
-/*** MODULATORS ****/
-void OSC_Modulate(int mod, oscillator_t *a, oscillator_t *b){
-	switch(mod){
-	case MOD_PHASE: 
-		b->phase_offset = a->output; 
-		break;
-	case MOD_AMP: 
-		b->amplitude = (a->output + 127) << 8;
-		break;
-	case MOD_MIX:
-		b->input = a->output;
-		break;
-	case MOD_SYNC:
-		if((a->phase + a->increment) < a->phase)
-			b->phase = 0; 
-		break;
-	case MOD_FREQ: 
-		b->phase += ((uint16_t)a->output) << 5; // 5 seems to give best range
-		break;
-	default:
-		//b->output = a->output;
-		break;
+// steps the oscillator. 
+// how many times / sec you call this is determined by "increment" value. 
+static void OSC_Step_R(oscillator_t *osc){
+	osc->phase += osc->increment;
+	
+	uint8_t phase = ((osc->phase >> 8) + osc->phase_offset);
+	uint8_t wave = OSC_GenWave(osc->waveform, phase);
+	
+	// scale the waveform according to volume and mix with input
+	uint8_t res = ((osc->amplitude >> 8) * wave) >> 8;
+	res = ((uint16_t)res + (uint16_t)osc->input) >> 1;
+	osc->output = res;
+	
+	if(osc->next){
+		switch(osc->modulation_target){
+		case MOD_PHASE: 
+			osc->next->phase_offset = res; 
+			break;
+		case MOD_AMP: 
+			osc->next->amplitude = res << 8;
+			break;
+		case MOD_MIX:
+			osc->next->input = res;
+			
+			break;
+		case MOD_SYNC:
+			// test if it will overflow during next iteration
+			if((osc->phase + osc->increment) < osc->phase)
+				osc->next->phase = 0; 
+			break;
+		case MOD_FREQ: 
+			osc->next->phase += ((int16_t)res - 128) * 32; // 5 seems to give best range
+			break;
+		default:
+			break;
+		}
+		
+		OSC_Step_R(osc->next);
 	}
+}
+
+void VO_Init(voice_t *vo){
+	vo->osc[0].next = &vo->osc[1];
+	vo->osc[1].next = &vo->osc[2];
+	vo->osc[2].next = 0;
+}
+
+
+static void VO_ApplyEnvelope(voice_t *vo){
+	// decay amount is divided by two in the end to make it less sensitive
+	uint16_t a = (vo->amplitude_fall >> (vo->decay >> 5)) * (32 - (vo->decay & 0x1f)) >> 1;
+	if(a > vo->amplitude_fall) a = vo->amplitude_fall; 
+	vo->amplitude_fall 	-= a;
+	vo->phase_rise 			-= (vo->phase_rise >> vo->attack);
+	vo->amplitude 			 = ((max_amp - vo->phase_rise) >> 8) * (vo->amplitude_fall >> 8) ;
 }
 
 void VO_Iterate(voice_t *vo){
@@ -204,21 +230,21 @@ void VO_Iterate(voice_t *vo){
 		VO_ApplyEnvelope(vo);
 	}
 	
-	OSC_Step(&vo->osc[0]);
-	OSC_Modulate(REG(MOD_01), &vo->osc[0], &vo->osc[1]);
-	OSC_Step(&vo->osc[1]);
-	OSC_Modulate(REG(MOD_12), &vo->osc[1], &vo->osc[2]);
-	OSC_Step(&vo->osc[2]);
+	// recursively step through all of the oscillators
+	OSC_Step_R(&vo->osc[0]);
 	
+	// compute the final instrument volume
 	int vol = ((vo->amplitude >> 8) * ((uint8_t)REG(MASTER_VOLUME))) >> 8;
-	vo->signal = (vol * vo->osc[1].output) >> 6;
-	//vo->signal = vo->osc[1].output;
+	// compute the signal
+	int out = vo->osc[2].output; //(vol * vo->osc[2].output) >> 6;
+	// amplify the final signal using gain and clamp it to available range
+	vo->signal = CLAMP((out * REG(MASTER_GAIN)) >> 1, 0, 255); //vo->osc[1].output * REG(MASTER_GAIN); 
 }
 
 void VO_Pluck(voice_t *vo){
 	vo->amplitude_fall = max_amp; 
 	vo->phase_rise = max_amp ;
-	//vo->amplitude = max_amp ;
+	vo->amplitude = max_amp ;
 	
 	//vo->osc[0].increment = INCREMENT_FROM_FREQ((((uint16_t)REG(OSC0_FREQ_H)) << 8) | REG(OSC0_FREQ_L));
 	vo->osc[0].phase_offset = REG(OSC0_PHASE_OFFSET);
@@ -226,14 +252,15 @@ void VO_Pluck(voice_t *vo){
 	vo->osc[0].waveform = REG(OSC0_WAVEFORM);
 	vo->osc[0].detune = REG(OSC0_DETUNE_COARSE);
 	vo->osc[0].fine_detune = REG(OSC0_DETUNE_FINE);
+	vo->osc[0].modulation_target = REG(MOD_01);
 	
-	//uint16_t fq = (REG(OSC1_FREQ_H) << 8) | REG(OSC1_FREQ_L);
-	//vo->osc[1].increment = INCREMENT_FROM_FREQ(fq);
+	//vo->osc[1].increment = INCREMENT_FROM_FREQ((((uint16_t)REG(OSC1_FREQ_H)) << 8) | REG(OSC1_FREQ_L));
 	vo->osc[1].phase_offset = REG(OSC1_PHASE_OFFSET);
 	vo->osc[1].amplitude = REG(OSC1_VOLUME) << 8;
 	vo->osc[1].waveform = REG(OSC1_WAVEFORM);
 	vo->osc[1].detune = REG(OSC1_DETUNE_COARSE);
 	vo->osc[1].fine_detune = REG(OSC1_DETUNE_FINE);
+	vo->osc[1].modulation_target = REG(MOD_12);
 	
 	//vo->osc[2].increment = INCREMENT_FROM_FREQ((((uint16_t)REG(OSC2_FREQ_H)) << 8) | REG(OSC2_FREQ_L));
 	vo->osc[2].phase_offset = REG(OSC2_PHASE_OFFSET);
@@ -253,6 +280,7 @@ void VO_Pluck(voice_t *vo){
 	
 	vo->pluck = 0;
 }
+
 const char *melody = 
 	"c4\x01"
 	"\0\0\0";
@@ -266,7 +294,7 @@ const char *melody =
 	
 	"b4\x08" "d4\x08" "g4\x08" "c5\x08"
 	"b4\x08" "d4\x08" "g4\x08" "c5\x08"
-	"b4\x08" "d4\x08" "g4\x08" "b5\x08"
+	"b4\x08" "d4\x08" "g4\x08" "c5\x08"
 	"b4\x08" "d4\x08" "g4\x08" "c5\x08"
 	
 	"f4\x08" "g4\x18" "c5\x08" "g5\x18"
@@ -327,17 +355,22 @@ ISR (TIMER1_COMPA_vect) {
 	//VO_Delay(&voices[0], &delay); 
 	//VO_Filter(&voices[0], &normal, &FI_Normalize);
 	
-	int sig = vo->signal + 127;
-	OCR0A = (sig > 255)?255:((sig < 0)?0:sig); //((voices[0].signal + voices[1].signal) / 2);
+	//uint16_t sig = vo->signal;
+	//OCR0A = (sig > 255)?255:((sig < 0)?0:sig); //((voices[0].signal + voices[1].signal) / 2);
+	uint8_t s = vo->signal;
+	//s = FI_SimpleLP_Fast(&filter, vo->signal);
+	//s = FI_SimpleHP_Fast(&filter, s);
+	
+	OCR0A = s;
 	
 	// profiling 
 	TCCR2B = 0;
 } 
 
-
-int freeMem () { 
+static uint16_t freeMem () { 
 	extern int __heap_start, *__brkval;
   int v; 
+  #pragma GCC diagnostic ignored "-Wreturn-local-addr"
   return (int) &v - (__brkval == 0 ? (int) &__heap_start : (int) __brkval); 
 }
 
@@ -345,7 +378,7 @@ int freeMem () {
 
 #define AUDIO_OUT(reg) BIT(D, 6, reg)
 
-void OSC_SetFrequencyFromNote(oscillator_t *osc, char note, int octave, uint8_t detune){
+static void OSC_SetFrequencyFromNote(oscillator_t *osc, char note, int octave, uint8_t detune){
 	int n = note - 'a';
 	int d = octave * 12 + ((NOTE_INDEX(n) + 9) % 12);
 	uint16_t fq = (pgm_read_word_near(&note_freq[d + detune + osc->detune] + osc->fine_detune));
@@ -374,37 +407,45 @@ int main(void){
 	
 	REG(OSC0_FREQ_H) = 0;
 	REG(OSC0_FREQ_L) = 200;
-	REG(OSC0_PHASE_OFFSET) = 0; 	// oscillator phase ofset from clock 0 - 256
-	REG(OSC0_VOLUME) = 255;			// volume 0 - 256
-	REG(OSC0_DETUNE_COARSE) = 0; // detune amount - high byte = octave, low byte = cycles
-	REG(OSC0_DETUNE_FINE) = 0;		// amount of fine detuning
-	REG(OSC0_WAVEFORM) = WAVE_TRIANGLE;			// 0 = sine, 1 = triangle, 2 = saw, 3 = square, 4 = noise
+	REG(OSC0_PHASE_OFFSET) = 0; 			// oscillator phase ofset from clock 0 - 256
+	REG(OSC0_VOLUME) = 255;						// volume 0 - 256
+	REG(OSC0_DETUNE_COARSE) = 0; 			// detune amount - high byte = octave, low byte = cycles
+	REG(OSC0_DETUNE_FINE) = 0;				// amount of fine detuning
+	REG(OSC0_WAVEFORM) = WAVE_SQUARE;		// 0 = sine, 1 = triangle, 2 = saw, 3 = square, 4 = noise
 	
+	REG(OSC1_FREQ_H) = 0;
+	REG(OSC1_FREQ_L) = 0;
 	REG(OSC1_PHASE_OFFSET) = 0;
-	REG(OSC1_VOLUME) = 255;
-	REG(OSC1_DETUNE_COARSE) = 0;
+	REG(OSC1_VOLUME) = 0;
+	REG(OSC1_DETUNE_COARSE) = -12;
 	REG(OSC1_DETUNE_FINE) = 0;
 	REG(OSC1_WAVEFORM) = WAVE_SINE;
 	
+	REG(OSC2_FREQ_H) = 0;
+	REG(OSC2_FREQ_L) = 0;
 	REG(OSC2_PHASE_OFFSET) = 0;
 	REG(OSC2_VOLUME) = 0;
 	REG(OSC2_DETUNE_COARSE) = 0;
 	REG(OSC2_DETUNE_FINE) = 0;
-	REG(OSC2_WAVEFORM) = WAVE_SAW; 
+	REG(OSC2_WAVEFORM) = WAVE_SQUARE; 
 	
 	// osc1 mod - 0 = passthrough, 1 = phase, 2 = frequency, 3 = amplitude, 4 = mix
+	REG(MOD_01) = MOD_AMP;		
+	REG(MOD_12) = MOD_PHASE;
+	
 	REG(MOD_01) = MOD_MIX;		
-	REG(MOD_12) = MOD_PASS;
+	REG(MOD_12) = MOD_MIX;
 	
 	REG(INPUT_OSC) = 0b00000111;	// which oscillators get set to input frequency (bit 0 = osc0 etc..)
 	
 	// envelope settings
 	REG(ENV_ATTACK) = 0;	// time from pluck to reaching full volume in ms * 10, 256 = 2.56 senconds. 
-	REG(ENV_DECAY) = (5 << 5 | (0x1f & 0));		// time from pluck to reaching sustain level
+	REG(ENV_DECAY) = 240; //(5 << 5 | (31 & 0x1f));		// time from pluck to reaching sustain level
 	REG(ENV_SUSTAIN) = 127;	// level of sustain 0 = no sustain, 256 = full volume
 	REG(ENV_RELEASE) = 255;	// time after the string is released until it is quiet
 	 
 	REG(MASTER_VOLUME) = 255;
+	REG(MASTER_GAIN) = 4;
 	
 	// filter settings
 	REG(FL0_TYPE) = 0;				// 0 = none 1 = lowpass, 2 highpass, 3 distortion
@@ -414,14 +455,26 @@ int main(void){
 	REG(CONTROL) = 3; // bits: 0 = enable, 1 = loop
 	
 	voice_t *vo = &synth;
-
+	VO_Init(vo);
+	
 	//vo->osc[0].increment = INCREMENT_FROM_FREQ(2);
 	//vo->osc[1].increment = INCREMENT_FROM_FREQ(500);
 	//vo->osc[2].increment = INCREMENT_FROM_FREQ(60);
 	
-	vo->decay = 4 ;
 	vo->attack = 1 ;
 
+	filter.factor = 0;
+	filter.resonance = 1;
+	filter.initialized = 0; 
+	filter.acc = 0; 
+	
+	highpass.factor = 240;
+	highpass.resonance = 1;
+	highpass.initialized = 0; 
+	highpass.acc = 0; 
+	
+	dist.initialized = 0; 
+	dist.acc = 0; 
 	/*lowpass.frequency = 1200;
 	lowpass.resonance = 1;
 	lowpass.initialized = 0; 
@@ -453,11 +506,11 @@ int main(void){
 				
 				
 				for(int c = 0; c < 3; c++){
-					if(REG(INPUT_OSC) & (1 << c))
+					uint16_t p = U_OSC0_FREQ_H + (U_OSC1_FREQ_H - U_OSC0_FREQ_H) * c; 
+					
+					if((REG(INPUT_OSC) & (1 << c)) && !_reg[p] && !_reg[p+1]){
 						OSC_SetFrequencyFromNote(&synth.osc[c], note->note, note->octave - '0', flatness);
-					else {
-						// NOTE: be careful with the layout of the enum!
-						uint16_t p = U_OSC0_FREQ_H + (U_OSC1_FREQ_H - U_OSC1_FREQ_H) * c; 
+					} else {
 						synth.osc[c].increment = INCREMENT_FROM_FREQ((_reg[p] << 8) | _reg[p+1]);
 					}
 				}
