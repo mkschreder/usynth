@@ -18,7 +18,7 @@ typedef volatile struct oscillator_s {
 	
 	uint8_t 		waveform;
 	
-	uint8_t 		input, output; 
+	int8_t 		input, output; 
 	
 	uint8_t 		modulation_target;
 	
@@ -45,7 +45,7 @@ typedef volatile struct filter_s {
 	uint8_t	cutoff; 
 	uint8_t 	initialized;
 	int8_t 	prev_sample;
-	int16_t acc;
+	int16_t 	acc;
 	signed		char	min, max; 
 	float		 	a0, a1, a2, a3, a4, x1, x2, y1, y2;
 } filter_t;

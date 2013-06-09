@@ -123,14 +123,14 @@ static int16_t DTS(int16_t ui16, uint8_t ui8){
 
 /* FILTERS */
 	
-static uint8_t FI_SimpleLP_Fast(filter_t *fi, uint8_t sample){
+static int8_t FI_SimpleLP_Fast(filter_t *fi, int8_t sample){
 	int16_t dy = ((sample * 128) - fi->acc);
 	fi->acc += ((dy / 256) * fi->cutoff); 
 	return fi->acc / 128;
 }
 
-static uint8_t FI_SimpleHP_Fast(filter_t *fi, uint8_t sample){
-	return ((sample - FI_SimpleLP_Fast(fi, sample)) / 2) + 128;
+static int8_t FI_SimpleHP_Fast(filter_t *fi, int8_t sample){
+	return ((sample - FI_SimpleLP_Fast(fi, sample)) / 2);
 }
 
 static uint8_t FI_Distortion(filter_t *fi, uint8_t x){
@@ -168,16 +168,16 @@ static signed char FI_1PoleLP(filter_t *fi, signed char sample){
 
 /* Synth functions */
 
-static uint8_t OSC_GenWave(uint8_t waveform, uint8_t phase){
+static int8_t OSC_GenWave(uint8_t waveform, uint8_t phase){
 	switch(waveform) {
 		case WAVE_SINE: 
-			return SIN(phase) + 128;
+			return SIN(phase);
 			break;
 		case WAVE_SAW: 
-			return phase;
+			return phase - 128;
 			break;
 		case WAVE_SQUARE:
-			return ((phase < 128)?0:255);
+			return ((phase < 128)?0:255) - 128;
 			break;
 		case WAVE_TRIANGLE:
 			{
@@ -187,11 +187,11 @@ static uint8_t OSC_GenWave(uint8_t waveform, uint8_t phase){
 				// need this cap
 				w = (w > 127)?127:w;
 				w = (w < -127)?-127:w;
-				return (w * 2); // - 127
+				return (w * 2) - 127; // - 127
 			}
 			break;
 		case WAVE_NOISE:
-			return rand() & 0xff;
+			return rand() & 0xff - 128;
 			break;
 		default:
 			return 0;
@@ -205,10 +205,10 @@ static void OSC_Step_R(oscillator_t *osc){
 	osc->phase += osc->increment;
 	
 	uint8_t phase = ((osc->phase >> 8) + osc->phase_offset);
-	uint8_t wave = OSC_GenWave(osc->waveform, phase);
+	int8_t wave = OSC_GenWave(osc->waveform, phase);
 	
 	// scale the waveform according to volume and mix with input
-	uint16_t res = ((uint16_t)wave + (uint16_t)osc->input) / 2;
+	int16_t res = ((uint16_t)wave + (uint16_t)osc->input) / 2;
 	res = ((osc->amplitude / 256) * res) / 256;
 	osc->output = res;
 	
@@ -218,7 +218,7 @@ static void OSC_Step_R(oscillator_t *osc){
 			osc->next->phase_offset = res; 
 			break;
 		case MOD_AMP: 
-			osc->next->amplitude = res << 8;
+			osc->next->amplitude = res * 256;
 			break;
 		case MOD_MIX:
 			osc->next->input = res;
@@ -229,7 +229,7 @@ static void OSC_Step_R(oscillator_t *osc){
 				osc->next->phase = 0; 
 			break;
 		case MOD_FREQ: 
-			osc->next->phase += ((int16_t)res - 128) * 32; // 5 seems to give best range
+			osc->next->phase += res * 32; // 5 seems to give best range
 			break;
 		default:
 			break;
@@ -265,7 +265,7 @@ void VO_Iterate(voice_t *vo){
 	// recursively step through all of the oscillators
 	OSC_Step_R(&vo->osc[0]);
 	
-	uint8_t s = vo->osc[2].output;
+	int8_t s = vo->osc[2].output;
 	//s = FI_SimpleLP_Fast(&filter, s);
 	//s = FI_SimpleHP_Fast(&highpass, s);
 	//s = FI_Distortion(&filter, s);
@@ -273,9 +273,8 @@ void VO_Iterate(voice_t *vo){
 	// compute the final instrument volume
 	uint8_t vol = ((vo->amplitude / 256) * ((uint8_t)REG(MASTER_VOLUME))) / 256;
 	// compute the signal
-	int16_t sig = s - 128;
-	uint8_t out = (vol * sig) / 256 + 128;
-	vo->signal = out; //(sig * (uint8_t)REG(MASTER_GAIN)); //CLAMP((out * REG(MASTER_GAIN)) / 2, 0, 255); //vo->osc[1].output * REG(MASTER_GAIN); 
+	vo->signal = (vol * s) / 256;
+	 //(sig * (uint8_t)REG(MASTER_GAIN)); //CLAMP((out * REG(MASTER_GAIN)) / 2, 0, 255); //vo->osc[1].output * REG(MASTER_GAIN); 
 }
 
 void VO_Pluck(voice_t *vo){
@@ -335,7 +334,7 @@ ISR (TIMER1_COMPA_vect) {
 	VO_Iterate(vo);
 	vo->time ++;
 	
-	OCR0A = vo->signal;
+	OCR0A = vo->signal + 128;
 	
 	// profiling 
 	TCCR2B = 0;
