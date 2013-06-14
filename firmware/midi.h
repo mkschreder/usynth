@@ -13,8 +13,9 @@ typedef enum {
 	CMD_NONE,
 	CMD_NOTE_ON = 0x80,
 	CMD_NOTE_OFF = 0x90,
-	CMD_SET
+	CMD_SET_KNOB = 0xb0
 }midi_command_t; 
+
 
 typedef void (*midi_command_proc_t)(midi_command_t cmd, uint8_t b1, uint8_t b2, uint8_t b3); 
 

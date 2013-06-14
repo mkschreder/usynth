@@ -369,6 +369,7 @@ static void OSC_SetFrequencyFromNote(oscillator_t *osc, char note, int octave, u
 
 #include "midi/midi.h"
 
+static 
 void midi_command_proc(midi_command_t cmd, uint8_t byte0, uint8_t byte1, uint8_t byte2){
 	if(cmd == CMD_NOTE_ON){
 		cli(); 
@@ -376,9 +377,13 @@ void midi_command_proc(midi_command_t cmd, uint8_t byte0, uint8_t byte1, uint8_t
 		//U_PlayNote(&synth, 0, 3, 0);
 		sei(); 
 		uart_putchar('K');
-	}
-	else if(cmd == CMD_NOTE_OFF){
+	} else if(cmd == CMD_NOTE_OFF){
+		cli();
+		U_ReleaseNoteRaw(&synth, byte0); 
+		sei();
 		uart_putchar('F');
+	} else if(cmd == CMD_SET_KNOB){
+		U_SetKnob(&synth, byte0, byte1); 
 	} else {
 		uart_putchar('N');
 		uart_putchar(cmd);
@@ -404,7 +409,7 @@ int main(void){
 	TCCR1B = 0x09; 	//full speed; clear-on-match
 	TCCR1A = 0x00;	//turn off pwm and oc lines
 
-	U_Init(&synth);
+	U_Init(&synth, SAMPLES_PER_SECOND);
 	
 	// turn on all ISRs
 	sei() ;

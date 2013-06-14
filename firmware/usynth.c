@@ -7,7 +7,24 @@
 #define COUNTER_MIN 0
 
 #define SAMPLES_PER_SECOND (COUNTER_MAX / 4)
-#define INCREMENT_FROM_FREQ(q) (uint16_t)(4 * (q)) 
+#define INCREMENT_FROM_FREQ(q, rate) (uint16_t)((COUNTER_MAX / rate) * (q)) 
+
+
+#define MIN(x, y) (((x) < (y))?(x):(y))
+#ifndef MAX
+#define MAX(x, y) (((x) > (y))?(x):(y))
+#endif
+int16_t LIMIT(int16_t bottom, int16_t top, int16_t variable){
+	return MAX(bottom, MIN(top, variable));
+}
+
+int16_t VOLUME(int16_t sample, uint8_t vol){
+	return (sample * vol) / 256; 
+}
+
+int16_t MIX(int16_t a, int16_t b){
+	return LIMIT(-128, 127, a + b);
+}
 
 #ifdef __linux__
 #define PROGMEM PSTORE
@@ -110,12 +127,38 @@ static int16_t FI_SimpleLP_Fast(fil_t *fi, int16_t sample){
 	int32_t dy = ((s * 128) - fi->acc);
 	fi->acc += ((dy * fi->cutoff) / 256); //(uint16_t)fi->cutoff); 
 	return (fi->acc / 128);
-	
-	/*uint16_t s = sample + 128;
-	int32_t dy = ((s * 128) - fi->acc);
-	fi->acc += ((dy * fi->cutoff) / 256); //(uint16_t)fi->cutoff); 
-	return (fi->acc >> 8) - 128;*/
 }
+
+#define MIN(x, y) (((x) < (y))?(x):(y))
+#define MAX(x, y) (((x) > (y))?(x):(y))
+
+/*
+// the Schroder filter - a fast, enhanced lowpass filter
+static int16_t FI_Schroder(fil_t *fi, int16_t sample) {
+	 if(sample - fi->pos < 0){
+		fi->vel -= (255 - fi->cutoff) >> 1; 
+		fi->pos += fi->vel / 128; 
+		sample = fi->pos; 
+	} else {
+		fi->vel = 0; 
+		fi->pos = sample; 
+	}
+	
+	// lowpass
+	sample = FI_SimpleLP_Fast(fi, sample); 
+	
+	static long min = -127; 
+	static long max = 127; 
+	min = MIN(min, sample * 128); 
+	max = MAX(max, sample * 128); 
+	min++; 
+	max--; 
+	long zero = ((min+max) / 2) / 128;
+	sample -= zero; 
+	
+	return sample; 
+}*/
+
 /*
 static int8_t FI_SimpleHP_Fast(fil_t *fi, int8_t sample){
 	uint8_t s = sample + 127;
@@ -144,7 +187,7 @@ static int8_t FI_Distortion(fil_t *fi, int8_t x){
 static void OSC_Process(osc_t *osc) {
 	if(osc->waveform){
 		osc->output = osc->waveform(((osc->phase_acc >> 8) + (uint16_t)osc->phase_offset) & 0xff); 
-		osc->output = ((osc->amp_acc >> 9) * osc->output) / 128; 
+		//osc->output = ((osc->amp_acc >> 9) * osc->output) / 128; 
 	}
 	osc->phase_acc += osc->phase_dx; 
 	
@@ -153,12 +196,11 @@ static void OSC_Process(osc_t *osc) {
 }
 
 static void OSC_Reset(osc_t *osc){
-	osc->amp_acc = UINT16_MAX; 
+	
 }
 
 static void ENV_Reset(env_t *env){
 	env->time = 0; 
-	env->volume = 0; 
 }
 
 static void ENV_Setup(env_t *env, uint8_t a, uint8_t d, uint8_t s, uint8_t r){
@@ -168,23 +210,22 @@ static void ENV_Setup(env_t *env, uint8_t a, uint8_t d, uint8_t s, uint8_t r){
 	env->r_dx = UINT16_MAX/r;
 	env->sustain = s; 
 	env->time = 0; 
-	env->volume = 0; 
+	env->volume = 255; 
 }
 
 // should be called at 64 times per second relative to sample rate
 static void ENV_Process(env_t *env, uint8_t pressed){
 	uint8_t a = (env->attack + env->decay); 
-	if(env->time > (a + env->release)) return; // we are done
-	
 	if(env->time < env->attack){ // attack stage 0..attack
-		env->volume = 255 - EXP(((uint8_t)env->time * (uint16_t)env->a_dx) / 256); 
+			env->volume = 255 - EXP(((uint8_t)env->time * (uint16_t)env->a_dx) / 256); 
 	} else if(env->time >= env->attack && env->time < a && env->volume > env->sustain){ // decay attack..decay && volume > sustain
-		env->volume = env->sustain + ((255 - env->sustain) * 
-				EXP((((uint8_t)env->time - (uint8_t)env->attack) * (uint16_t)env->d_dx) / 256))/ 256; 
-	} else if(env->time >= a && pressed){
-		return; // halt until key is released
+		env->volume = env->sustain + ((255 - env->sustain) * EXP(((env->time - env->attack) * env->d_dx) / 256)) / 256; 
+	} else if(env->time >= a && env->pressed){
+		return; 
 	} else if(env->time >= a && env->time < (a + env->release)){
 		env->volume = env->sustain * EXP(((env->time - a) * env->r_dx) / 256) / 256;
+	} else {
+				 env->volume = 0; 
 	}
 	env->time++; 
 }
@@ -213,35 +254,42 @@ void EFT_KarplusInit(eft_t *eft){
 	EFT_KarplusReset(eft); 
 }
 */
-void U_Init(synth_t *s){
+void U_Init(synth_t *s, uint16_t sample_rate){
 	// first oscillator
 	s->osc1.detune = 0; 
-	s->osc1.pitch = 3000; 
-	s->osc1.fade = 0;
+	s->osc1.fine_tune = 0; 
 	s->osc1.waveform = SIN; 
 	s->osc1.lfo = 0; 
+	s->osc1.phase_dx = 0; 
+	s->osc1.phase_offset = 0; 
 	
 	s->osc2.detune = 0; 
-	s->osc2.pitch = 0; 
+	s->osc2.fine_tune = 0; 
 	s->osc2.lfo = 0; 
 	s->osc2.waveform = SIN; 
+	s->osc2.phase_dx = 0; 
+	s->osc2.phase_offset = 0; 
 	
 	// sinusoidal lfo
-	s->lfo.phase_dx = INCREMENT_FROM_FREQ(4); 
+	s->lfo_speed = 0; 
+	s->lfo_osc_amount = 0; 
+	s->lfo_filt_amount = 0; 
+	s->lfo_amp_amount = 0; 
 	s->lfo.waveform = SIN; 
-	s->lfo.amp_acc = UINT16_MAX; 
+	s->lfo.phase_dx = 0; 
+	s->lfo.phase_offset = 0; 
 	
 	s->mix = 128; 
 	
-	s->lowpass.cutoff = 80; 
-	s->lowpass.lfo = 255; 
-	s->lowpass.decay = 0;
+	s->filter.cutoff = 255; 
 	
 	ENV_Setup(&s->filter_env, 32, 32, 0, 32); 
 	//ENV_Setup(&s->envelope, 2, 1, 255, 12);
-	ENV_Setup(&s->envelope, 2, 1, 255, 32);
+	ENV_Setup(&s->envelope, 5, 1, 255, 32);
 	
 	//EFT_KarplusInit(&s->effect); 
+	s->sample_rate = sample_rate;
+	s->increment_per_herz = UINT_MAX / sample_rate; 
 	
 	s->amp.level = 255; 
 	
@@ -255,13 +303,11 @@ void U_PlayNoteRaw(synth_t *s, uint8_t note){
 	OSC_Reset(&s->osc2); 
 	OSC_Reset(&s->lfo); 
 	
-	uint16_t fq = S_FrequencyFromIndex(note);
-	s->osc1.phase_dx = INCREMENT_FROM_FREQ(fq); 
+	uint16_t fq = S_FrequencyFromIndex(note + s->osc1.detune);
+	s->osc1.phase_dx = (fq + s->osc1.fine_tune) * s->increment_per_herz; 
 	
-	//fq = S_FrequencyFromIndex(note);
-	s->osc2.phase_dx = INCREMENT_FROM_FREQ(fq); 
-	
-	//s->effect.phase_dx = INCREMENT_FROM_FREQ(fq); 
+	fq = S_FrequencyFromIndex(note + s->osc1.detune);
+	s->osc2.phase_dx = (fq + s->osc1.fine_tune) * s->increment_per_herz; 
 }
 
 void U_PlayNote(synth_t *s, uint8_t note, uint8_t octave, int8_t kind){
@@ -274,15 +320,104 @@ void U_PlayNote(synth_t *s, uint8_t note, uint8_t octave, int8_t kind){
 	
 	//s->effect.reset(&s->effect); 
 	
-	uint16_t fq = S_FrequencyFromNote(note, octave, kind + s->osc1.detune, s->osc1.pitch);
-	s->osc1.phase_dx = INCREMENT_FROM_FREQ(fq); 
+	uint16_t fq = S_FrequencyFromNote(note, octave, kind + s->osc1.detune, s->osc1.fine_tune);
+	s->osc1.phase_dx = s->increment_per_herz * fq; 
 	
-	fq = S_FrequencyFromNote(note, octave, kind + s->osc2.detune, s->osc2.pitch);
-	s->osc2.phase_dx = INCREMENT_FROM_FREQ(fq); 
+	fq = S_FrequencyFromNote(note, octave, kind + s->osc2.detune, s->osc2.fine_tune);
+	s->osc2.phase_dx = fq * s->increment_per_herz; 
 }
 
-#define MIN(x, y) (((x) < (y))?(x):(y))
-#define MAX(x, y) MIN(y, x)
+void U_ReleaseNoteRaw(synth_t *s, uint8_t note){
+	s->envelope.pressed = 0; 
+}
+
+void U_SetKnob(synth_t *synth, uint8_t knob, int8_t value){
+	switch(knob){
+		case KB_OSC1_WAVEFORM: 
+			if(value == 0)
+				synth->osc1.waveform = SIN; 
+			else if(value == 1)
+				synth->osc1.waveform = SQUARE;
+			else if(value == 2)
+				synth->osc1.waveform = SAWL;
+			else if(value == 3)
+				synth->osc1.waveform = SAWR;
+			else if(value == 4)
+				synth->osc1.waveform = TRIANGLE;
+			break; 
+		case KB_OSC1_DETUNE:
+			synth->osc1.detune = value;
+			break; 
+		case KB_OSC1_FINE_TUNE: 
+			synth->osc1.fine_tune = value; 
+			break; 
+		case KB_OSC1_PHASE_OFFSET: 
+			synth->osc1.phase_offset = value; 
+			break;
+		case KB_OSC2_WAVEFORM: 
+			if(value == 0)
+				synth->osc2.waveform = SIN; 
+			else if(value == 1)
+				synth->osc2.waveform = SQUARE;
+			else if(value == 2)
+				synth->osc2.waveform = SAWL;
+			else if(value == 3)
+				synth->osc2.waveform = SAWR;
+			else if(value == 4)
+				synth->osc2.waveform = TRIANGLE;
+			break; 
+		case KB_OSC2_DETUNE: 
+			synth->osc2.detune = value; 
+			break; 
+		case KB_OSC2_FINE_TUNE: 
+			synth->osc2.fine_tune = value; 
+			break; 
+		case KB_OSC2_PHASE_OFFSET: 
+			synth->osc2.phase_offset = value; 
+			break;
+		case KB_OSC_MIX_AMOUNT: 
+			synth->mix = value; 
+			break; 
+		case KB_LFO_SPEED: 
+			synth->lfo_speed = value; 
+			break; 
+		case KB_LFO_TO_OSC: 
+			synth->lfo_osc_amount = value; 
+			break; 
+		case KB_LFO_TO_FILTER: 
+			synth->lfo_filt_amount = (uint8_t)value; 
+			break; 
+		case KB_LFO_TO_AMP: 
+			synth->lfo_amp_amount = (uint8_t)value; 
+			break; 
+		case KB_AMP_ENV_ATTACK: 
+			synth->envelope.attack = (int16_t)value + 128; 
+			break; 
+		case KB_AMP_ENV_DECAY: 
+			synth->envelope.decay = (int16_t)value + 128; 
+			break; 
+		case KB_AMP_ENV_SUSTAIN: 
+			synth->envelope.sustain = (int16_t)value + 128; 
+			break; 
+		case KB_AMP_ENV_RELEASE: 
+			synth->envelope.release = (int16_t)value + 128; 
+			break; 
+		case KB_FILTER_CUTOFF: 
+			synth->preset_cutoff = (uint8_t)value + 128; 
+			break; 
+		case KB_FILTER_ENV_AMOUNT: 
+			break; 
+		case KB_FILTER_ATTACK: 
+		case KB_FILTER_DECAY: 
+		case KB_FILTER_SUSTAIN: 
+		case KB_FILTER_RELEASE: 
+			break; 
+		case KB_AMP_VOLUME: 
+			synth->preset_amp_level = value + 128; 
+			break; 
+	}
+}
+
 #define saturate(x) MIN(MAX(-1.0,x),1.0)
 
 float BassBoosta(float sample)
@@ -315,6 +450,7 @@ void Bezier(float x1, float y1, float x2, float y2, float x3, float y3, float *x
     *y = getPt( ya , yb , i );
 }
 
+	fil_t fi; 
 // should be called once for each sample at the rate of samplerate
 uint8_t U_GenSample(synth_t *synth){
 	static uint16_t counter = 0; 
@@ -323,7 +459,7 @@ uint8_t U_GenSample(synth_t *synth){
 		ENV_Process(&synth->filter_env, 0); 
 	}
 	counter++; 
-	
+	/*
 	static int16_t s = 0;  
 	static int incr = 1073; 
 	static uint16_t cr = 0; 
@@ -339,17 +475,17 @@ uint8_t U_GenSample(synth_t *synth){
 	p0 += w0;// + SIN(p1 >> 8) * 16;
 	p1 += w1;
 	p2 += w2;
-	p3 += w3; 
+	p3 += w3; */
 	// this mixing procedure works
-	s = (SAWR(p0 >> 8) - SQUARE(p1 >> 8) - SIN(p2 >> 8) - SIN(p3 >> 8)) / 4;
-	s = SAWR(p0 >> 8);
+	//s = (SAWR(p0 >> 8) - SQUARE(p1 >> 8) - SIN(p2 >> 8) - SIN(p3 >> 8)) / 4;
+	//s = SQUARE(p0 >> 8);
 	
-	
+	/*
 	static long vel = 0; 
 	static long pos = 0; 
 	if(s - pos < 0){
-		vel -= 1; 
-		pos += vel >> 2; 
+		vel -= 10; 
+		pos += vel >> 5; 
 		s = pos; 
 	} else {
 		vel = 0; 
@@ -381,54 +517,66 @@ uint8_t U_GenSample(synth_t *synth){
 	//s -= SIN(p1 >> 8) * resonance ;
 	//s = (int8_t)(s / 2); 
 	//s = (synth->envelope.volume * s) / 256; 
-	/*
+	
 	static double fs = 0, fs1 = 0, fs2 = 0; 
 	float a = 0.8;
 	fs = (s * (1 - a)) + (fs * a); //= (fs2 + fs1 + fs + s) / 4; 
 	fs2 = fs1;
 	fs1 = fs; 
 	//fs = 0.2 * s + (1.0 - 0.2) * fs;
-	s = (int8_t) fs; //((fs + fs1 + fs2) / 3); */
+	s = (int8_t) fs; //((fs + fs1 + fs2) / 3); 
 	synth->lowpass.cutoff = 10; //128 + synth->lfo.output; 
 	synth->lowpass.resonance = 0; 
-	s = FI_SimpleLP_Fast(&synth->lowpass, s) ;
-	//s = FI_SimpleLP_Fast(&synth->lowpass, s) * 4;*/
+	fi.cutoff = 64; 
+	s = FI_Schroder(&fi, s); 
+	//s = FI_SimpleLP_Fast(&synth->lowpass, s) ;
+	//s = FI_SimpleLP_Fast(&synth->lowpass, s) * 4;
 	return s + 128;
+	*/
 	
 	// run the oscillators 
 	OSC_Process(&synth->osc1); 
 	OSC_Process(&synth->osc2); 
 	OSC_Process(&synth->lfo); 
 	
-	// apply lfo to oscillator outputs
+	// set lfo frequency
+	synth->lfo.phase_dx = synth->lfo_speed * synth->increment_per_herz;
+	
 	int16_t osc1_out = synth->osc1.output; 
 	int16_t osc2_out = synth->osc2.output;
 	
 	// mix the output from the oscillators 
-	int16_t sample = (osc1_out + osc2_out) / 2; 
+	uint8_t osc2_vol = (uint8_t)(synth->mix + 127) / 2; 
+	uint8_t osc1_vol = (uint8_t)(127 - synth->mix) / 2; 
 	
-	// adjust filter params
-	synth->lowpass.cutoff = 128; //128 + synth->lfo.output; 
-	synth->lowpass.resonance = 0; 
+	int16_t sample = MIX(VOLUME(osc1_out, osc1_vol), VOLUME(osc2_out, osc2_vol)); 
 	
-	// modulate oscillators
-	synth->osc2.phase_offset = 64; //osc1_out + 128; 
-	//synth->osc2.phase_acc += synth->osc1.output; 
-	
-	//synth->osc1.amp_acc = 16000 + (128+synth->lfo.output) * 64; 
-	//synth->lowpass.resonance = 128 + ((int8_t)synth->lfo.output * (uint16_t)synth->lowpass.lfo) / 256; //(((int8_t)synth->lfo.output + 128) * (uint8_t)synth->lowpass.lfo) / 256; 
+	// apply lfo oscillation
+	int8_t lfo_to_filt = LIMIT(-128, 127, (synth->lfo.output * synth->lfo_filt_amount) / 256);
+	int8_t lfo_to_osc 	= LIMIT(-128, 127, (synth->lfo.output * synth->lfo_osc_amount) / 256);
+	int8_t lfo_to_amp 	= LIMIT(-128, 127, (synth->lfo.output * synth->lfo_amp_amount) / 256);
+	synth->osc1.phase_acc += lfo_to_osc; 
+	synth->osc2.phase_acc += lfo_to_osc; 
+	synth->filter.cutoff = LIMIT(0, 255, synth->preset_cutoff + lfo_to_filt); 
+	synth->amp.level = LIMIT(0, 255, synth->preset_amp_level + lfo_to_amp); 
 	
 	// pass through the effect buffer
 	//sample = synth->effect.run(&synth->effect, sample); 
 	
 	// filter the signal through the filters
-	sample = FI_SimpleLP_Fast(&synth->lowpass, sample);
+	sample = FI_SimpleLP_Fast(&synth->filter, sample);
+	//sample = FI_Schroder(&synth->lowpass, sample);
 	//sample = FI_Distortion(0, sample); 
 	
 	// amplify the signal with the output amp
-	sample = ((int8_t)sample * ((uint16_t)synth->amp.level >> 1)) / 128; 
+	sample = VOLUME(sample, synth->amp.level); 
 	
 	// apply the final sound envelope
-	sample = ((uint8_t)synth->envelope.volume * (int8_t)sample) / 256; 
+	sample = VOLUME(sample, synth->envelope.volume); 
+	
+	// clamp sample to the limits
+	sample = LIMIT(-128, 127, sample); 
+	
+	// return final sample
 	return (int8_t)sample + 128; 
 }
