@@ -1,8 +1,6 @@
 #include <inttypes.h>
 #include <limits.h>
 
-#include "midi.h"
-
 typedef int16_t 	sample_t; 
 typedef uint16_t 	counter_t; 
 typedef uint8_t 	period_t; 
@@ -13,11 +11,12 @@ typedef uint8_t 	period_t;
 #define SAMPLES_PER_SECOND (COUNTER_MAX / 4)
 #define INCREMENT_FROM_FREQ(q) (uint16_t)(4 * (q)) 
 
+
 // All variables should be integers and division should not be used. 
 typedef volatile struct oscillator_s {
 	// modulatable parameters
-	counter_t 	phase; 				// 0 - 65536
-	sample_t 	phase_offset; // -127, 127
+	uint16_t 	phase; 				// 0 - 65536
+	int8_t 		phase_offset; // -127, 127
 	uint16_t 	increment;    // 0 - 65536 
 	uint16_t 	amplitude; 		// 0 - 65536
 	
