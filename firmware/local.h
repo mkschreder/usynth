@@ -1,7 +1,7 @@
 #include <inttypes.h>
 #include <limits.h>
 
-#include "midi.h"
+#include "control.h"
 
 typedef int16_t 	sample_t; 
 typedef uint16_t 	counter_t; 

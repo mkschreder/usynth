@@ -10,11 +10,12 @@ typedef volatile struct env_s{
 	uint8_t attack, decay, sustain, release; 
 
 	// output variables
-	uint16_t volume; 
+	uint8_t volume; 
 	
 	// private variables
 	uint16_t time; 
 	uint16_t a_dx, d_dx, r_dx; 
+	uint16_t volume_acc; 
 	uint8_t 	pressed; 
 }env_t;
 
@@ -95,6 +96,7 @@ typedef volatile struct synth_s{
 void			U_Init(synth_t *synth, uint16_t sample_rate);
 void 			U_PlayNote(synth_t *synth, uint8_t note, uint8_t octave, int8_t kind); 
 void 			U_PlayNoteRaw(synth_t *s, uint8_t note);
+void 			U_ReleaseNote(synth_t *s, uint8_t note, uint8_t octave, uint8_t velocity);
 void 			U_ReleaseNoteRaw(synth_t *s, uint8_t note); 
 void 			U_SetKnob(synth_t *s, uint8_t knob, int8_t value); 
 uint8_t 	U_GenSample(synth_t *synth);

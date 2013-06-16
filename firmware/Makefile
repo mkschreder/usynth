@@ -11,8 +11,7 @@ APP = usynth
 all:
 	make $(APP)
 	
-$(APP): main.o uart.o usynth.o midi.o
-#midi/midi.o midi/midi_device.o midi/sysex_tools.o midi/bytequeue/bytequeue.o midi/bytequeue/interrupt_setting.o
+$(APP): main.o uart.o usynth.o control.o
 	$(CC) $^ -o $@.elf $(LDFLAGS)
 	avr-objcopy -j .text -j .data -O ihex $(APP).elf $(APP).hex
 
@@ -21,6 +20,10 @@ gui:
 	
 install:
 	$(AVRDUDE) -U flash:w:$(APP).hex 
+
+test: 
+	make -C .
+	./tests | sox -t raw -r 16384 -uLb 8 -c 1 - output.wav
 
 # Fuse high byte:
 # 0xc9 = 1 1 0 1   1 1 1 1 <-- BOOTRST (boot reset vector at 0x0000)

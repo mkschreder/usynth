@@ -19,7 +19,11 @@ int16_t LIMIT(int16_t bottom, int16_t top, int16_t variable){
 }
 
 int16_t VOLUME(int16_t sample, uint8_t vol){
-	return (sample * vol) / 256; 
+	return LIMIT(CHAR_MIN, CHAR_MAX, (sample * vol) / 256); 
+}
+
+int16_t SCALE(int16_t a, uint8_t parts){
+	return (a * parts) / 256;
 }
 
 int16_t MIX(int16_t a, int16_t b){
@@ -39,12 +43,13 @@ int16_t MIX(int16_t a, int16_t b){
 static const int8_t sineTable[256] PSTORE = {0, 3, 6, 9, 12, 16, 19, 22, 25, 28, 31, 34, 37, 40, 43, 46, 49, 51, 54, 57, 60, 63, 65, 68, 71, 73, 76, 78, 81, 83, 85, 88, 90, 92, 94, 96, 98, 100, 102, 104, 106, 107, 109, 111, 112, 113, 115, 116, 117, 118, 120, 121, 122, 122, 123, 124, 125, 125, 126, 126, 126, 127, 127, 127, 127, 127, 127, 127, 126, 126, 126, 125, 125, 124, 123, 122, 122, 121, 120, 118, 117, 116, 115, 113, 112, 111, 109, 107, 106, 104, 102, 100, 98, 96, 94, 92, 90, 88, 85, 83, 81, 78, 76, 73, 71, 68, 65, 63, 60, 57, 54, 51, 49, 46, 43, 40, 37, 34, 31, 28, 25, 22, 19, 16, 12, 9, 6, 3, 0, -3, -6, -9, -12, -16, -19, -22, -25, -28, -31, -34, -37, -40, -43, -46, -49, -51, -54, -57, -60, -63, -65, -68, -71, -73, -76, -78, -81, -83, -85, -88, -90, -92, -94, -96, -98, -100, -102, -104, -106, -107, -109, -111, -112, -113, -115, -116, -117, -118, -120, -121, -122, -122, -123, -124, -125, -125, -126, -126, -126, -127, -127, -127, -127, -127, -127, -127, -126, -126, -126, -125, -125, -124, -123, -122, -122, -121, -120, -118, -117, -116, -115, -113, -112, -111, -109, -107, -106, -104, -102, -100, -98, -96, -94, -92, -90, -88, -85, -83, -81, -78, -76, -73, -71, -68, -65, -63, -60, -57, -54, -51, -49, -46, -43, -40, -37, -34, -31, -28, -25, -22, -19, -16, -12, -9, -6, -3 };
 
 
-static const uint8_t expTable[256] PSTORE = {255, 235, 217, 201, 186, 171, 158, 146, 135, 125, 115, 107, 98, 91, 84, 77, 71, 66, 61, 56, 52, 48, 44, 41, 37, 35, 32, 29, 27, 25, 23, 21, 19, 18, 16, 15, 14, 13, 11, 11, 10, 9, 8, 7, 7, 6, 5, 5, 4, 4, 4, 3, 3, 3, 2, 2, 2, 1, 1, 1, 1, 1, 0, 0};
+static const uint8_t expTable[64] PSTORE = {255, 235, 217, 201, 186, 171, 158, 146, 135, 125, 115, 107, 98, 91, 84, 77, 71, 66, 61, 56, 52, 48, 44, 41, 37, 35, 32, 29, 27, 25, 23, 21, 19, 18, 16, 15, 14, 13, 11, 11, 10, 9, 8, 7, 7, 6, 5, 5, 4, 4, 4, 3, 3, 3, 2, 2, 2, 1, 1, 1, 1, 1, 0, 0};
 
 // linear approximation between the missing points
 // input value 0..255 - output = value 0..255
 static const uint8_t EXP(uint8_t x){
-	uint8_t i = (x >> 2);
+	//return exp(-x/40.f) * 255; 
+	uint8_t i = LIMIT(0, 63, (x >> 2));
 	uint8_t dy = (expTable[i] - expTable[i + 1]);
 	uint8_t i2 = ((x >> 1) & 1)?(dy >> 1):0;
 	uint8_t i1 = (x & 1)?(dy >> 2):0;
@@ -196,36 +201,67 @@ static void OSC_Process(osc_t *osc) {
 }
 
 static void OSC_Reset(osc_t *osc){
-	
+	osc->phase_acc = 0; 
 }
 
 static void ENV_Reset(env_t *env){
 	env->time = 0; 
+	env->pressed = 0; 
+	env->volume = 0; 
 }
 
+static void ENV_SetAttackTime(env_t *env, uint8_t a){
+	env->attack = a;
+	env->a_dx = (!a)?0:UINT16_MAX/a;
+}
+
+static void ENV_SetDecayTime(env_t *env, uint8_t d){
+	env->decay = d;
+	env->d_dx = (!d)?0:UINT16_MAX/d;
+}
+
+static void ENV_SetSustainLevel(env_t *env, uint8_t s){
+	env->sustain = s; 
+}
+
+static void ENV_SetReleaseTime(env_t *env, uint8_t r){
+	env->release = r;
+	env->r_dx = (!r)?0:UINT16_MAX/r;
+}
+
+/*
 static void ENV_Setup(env_t *env, uint8_t a, uint8_t d, uint8_t s, uint8_t r){
 	env->attack = a; env->decay = d; env->release = r;
 	env->a_dx = UINT16_MAX/a;
 	env->d_dx = UINT16_MAX/d;
 	env->r_dx = UINT16_MAX/r;
 	env->sustain = s; 
-	env->time = 0; 
-	env->volume = 255; 
 }
+*/
 
 // should be called at 64 times per second relative to sample rate
 static void ENV_Process(env_t *env, uint8_t pressed){
-	uint8_t a = (env->attack + env->decay); 
-	if(env->time < env->attack){ // attack stage 0..attack
-			env->volume = 255 - EXP(((uint8_t)env->time * (uint16_t)env->a_dx) / 256); 
-	} else if(env->time >= env->attack && env->time < a && env->volume > env->sustain){ // decay attack..decay && volume > sustain
-		env->volume = env->sustain + ((255 - env->sustain) * EXP(((env->time - env->attack) * env->d_dx) / 256)) / 256; 
-	} else if(env->time >= a && env->pressed){
+	uint16_t a = (env->attack + env->decay);
+	if(env->time >= a + env->release) {
+		env->volume = 0; 
 		return; 
-	} else if(env->time >= a && env->time < (a + env->release)){
-		env->volume = env->sustain * EXP(((env->time - a) * env->r_dx) / 256) / 256;
+	}
+	if(env->time == a && env->pressed){
+		env->volume = env->sustain; 
+		return; 
+	}
+	// if attack stage
+	if(env->time < env->attack){ // attack stage 0..attack
+		uint8_t frac = LIMIT(0, 255, (env->time * env->a_dx) / 256);
+		env->volume = LIMIT(0, 255, 255 - EXP(frac)); 
+	} else if(env->time < (env->attack + env->decay)){
+		uint8_t frac = LIMIT(0, 255, (env->time - env->attack) * env->d_dx / 256); 
+		env->volume = LIMIT(0, 255, env->sustain + SCALE(255 - env->sustain, EXP(frac))); 
+	} else if(env->time < (a + env->release)){
+		uint8_t frac = LIMIT(0, 255, ((env->time - a) * env->r_dx) / 256);
+		env->volume = SCALE(env->sustain, EXP(frac));
 	} else {
-				 env->volume = 0; 
+		env->volume = 0; 
 	}
 	env->time++; 
 }
@@ -258,7 +294,7 @@ void U_Init(synth_t *s, uint16_t sample_rate){
 	// first oscillator
 	s->osc1.detune = 0; 
 	s->osc1.fine_tune = 0; 
-	s->osc1.waveform = SIN; 
+	s->osc1.waveform = NOISE; 
 	s->osc1.lfo = 0; 
 	s->osc1.phase_dx = 0; 
 	s->osc1.phase_offset = 0; 
@@ -266,7 +302,7 @@ void U_Init(synth_t *s, uint16_t sample_rate){
 	s->osc2.detune = 0; 
 	s->osc2.fine_tune = 0; 
 	s->osc2.lfo = 0; 
-	s->osc2.waveform = SIN; 
+	s->osc2.waveform = NOISE; 
 	s->osc2.phase_dx = 0; 
 	s->osc2.phase_offset = 0; 
 	
@@ -283,9 +319,9 @@ void U_Init(synth_t *s, uint16_t sample_rate){
 	
 	s->filter.cutoff = 255; 
 	
-	ENV_Setup(&s->filter_env, 32, 32, 0, 32); 
+	//ENV_Setup(&s->filter_env, 32, 32, 0, 32); 
 	//ENV_Setup(&s->envelope, 2, 1, 255, 12);
-	ENV_Setup(&s->envelope, 5, 1, 255, 32);
+	//ENV_Setup(&s->envelope, 30, 30, 255, 30);
 	
 	//EFT_KarplusInit(&s->effect); 
 	s->sample_rate = sample_rate;
@@ -308,6 +344,8 @@ void U_PlayNoteRaw(synth_t *s, uint8_t note){
 	
 	fq = S_FrequencyFromIndex(note + s->osc1.detune);
 	s->osc2.phase_dx = (fq + s->osc1.fine_tune) * s->increment_per_herz; 
+	
+	s->envelope.pressed = 1; 
 }
 
 void U_PlayNote(synth_t *s, uint8_t note, uint8_t octave, int8_t kind){
@@ -325,24 +363,30 @@ void U_PlayNote(synth_t *s, uint8_t note, uint8_t octave, int8_t kind){
 	
 	fq = S_FrequencyFromNote(note, octave, kind + s->osc2.detune, s->osc2.fine_tune);
 	s->osc2.phase_dx = fq * s->increment_per_herz; 
+	
+	s->envelope.pressed = 1; 
 }
 
 void U_ReleaseNoteRaw(synth_t *s, uint8_t note){
 	s->envelope.pressed = 0; 
 }
 
+void U_ReleaseNote(synth_t *s, uint8_t note, uint8_t octave, uint8_t velocity){
+	s->envelope.pressed = 0; 
+}
+
 void U_SetKnob(synth_t *synth, uint8_t knob, int8_t value){
 	switch(knob){
 		case KB_OSC1_WAVEFORM: 
-			if(value == 0)
+			if(value == WAVE_SIN)
 				synth->osc1.waveform = SIN; 
-			else if(value == 1)
+			else if(value == WAVE_SQUARE)
 				synth->osc1.waveform = SQUARE;
-			else if(value == 2)
+			else if(value == WAVE_SAWL)
 				synth->osc1.waveform = SAWL;
-			else if(value == 3)
+			else if(value == WAVE_SAWR)
 				synth->osc1.waveform = SAWR;
-			else if(value == 4)
+			else if(value == WAVE_TRIANGLE)
 				synth->osc1.waveform = TRIANGLE;
 			break; 
 		case KB_OSC1_DETUNE:
@@ -355,15 +399,15 @@ void U_SetKnob(synth_t *synth, uint8_t knob, int8_t value){
 			synth->osc1.phase_offset = value; 
 			break;
 		case KB_OSC2_WAVEFORM: 
-			if(value == 0)
+			if(value == WAVE_SIN)
 				synth->osc2.waveform = SIN; 
-			else if(value == 1)
+			else if(value == WAVE_SQUARE)
 				synth->osc2.waveform = SQUARE;
-			else if(value == 2)
+			else if(value == WAVE_SAWL)
 				synth->osc2.waveform = SAWL;
-			else if(value == 3)
+			else if(value == WAVE_SAWR)
 				synth->osc2.waveform = SAWR;
-			else if(value == 4)
+			else if(value == WAVE_TRIANGLE)
 				synth->osc2.waveform = TRIANGLE;
 			break; 
 		case KB_OSC2_DETUNE: 
@@ -379,31 +423,31 @@ void U_SetKnob(synth_t *synth, uint8_t knob, int8_t value){
 			synth->mix = value; 
 			break; 
 		case KB_LFO_SPEED: 
-			synth->lfo_speed = value; 
+			synth->lfo_speed = LIMIT(0, 127, value); 
 			break; 
 		case KB_LFO_TO_OSC: 
-			synth->lfo_osc_amount = value; 
+			synth->lfo_osc_amount = LIMIT(0, 255, value * 2); 
 			break; 
 		case KB_LFO_TO_FILTER: 
-			synth->lfo_filt_amount = (uint8_t)value; 
+			synth->lfo_filt_amount = LIMIT(0, 255, value * 2); 
 			break; 
 		case KB_LFO_TO_AMP: 
-			synth->lfo_amp_amount = (uint8_t)value; 
+			synth->lfo_amp_amount = LIMIT(0, 255, value * 2); 
 			break; 
 		case KB_AMP_ENV_ATTACK: 
-			synth->envelope.attack = (int16_t)value + 128; 
+			ENV_SetAttackTime(&synth->envelope, LIMIT(0, 255, value * 2));
 			break; 
 		case KB_AMP_ENV_DECAY: 
-			synth->envelope.decay = (int16_t)value + 128; 
+			ENV_SetDecayTime(&synth->envelope, LIMIT(0, 255, value * 2));
 			break; 
 		case KB_AMP_ENV_SUSTAIN: 
-			synth->envelope.sustain = (int16_t)value + 128; 
+			ENV_SetSustainLevel(&synth->envelope, LIMIT(0, 255, value * 2));
 			break; 
 		case KB_AMP_ENV_RELEASE: 
-			synth->envelope.release = (int16_t)value + 128; 
+			ENV_SetReleaseTime(&synth->envelope, LIMIT(0, 255, value * 2));
 			break; 
 		case KB_FILTER_CUTOFF: 
-			synth->preset_cutoff = (uint8_t)value + 128; 
+			synth->preset_cutoff = LIMIT(0, 255, value * 2); 
 			break; 
 		case KB_FILTER_ENV_AMOUNT: 
 			break; 
@@ -413,7 +457,7 @@ void U_SetKnob(synth_t *synth, uint8_t knob, int8_t value){
 		case KB_FILTER_RELEASE: 
 			break; 
 		case KB_AMP_VOLUME: 
-			synth->preset_amp_level = value + 128; 
+			synth->preset_amp_level = LIMIT(0, 255, value * 2); 
 			break; 
 	}
 }
@@ -455,7 +499,7 @@ void Bezier(float x1, float y1, float x2, float y2, float x3, float y3, float *x
 uint8_t U_GenSample(synth_t *synth){
 	static uint16_t counter = 0; 
 	if((counter & 0xff) == 0){
-		ENV_Process(&synth->envelope, 0);
+		ENV_Process(&synth->envelope, 1);
 		ENV_Process(&synth->filter_env, 0); 
 	}
 	counter++; 
@@ -546,18 +590,22 @@ uint8_t U_GenSample(synth_t *synth){
 	int16_t osc2_out = synth->osc2.output;
 	
 	// mix the output from the oscillators 
-	uint8_t osc2_vol = (uint8_t)(synth->mix + 127) / 2; 
-	uint8_t osc1_vol = (uint8_t)(127 - synth->mix) / 2; 
+	uint8_t osc1_vol = 255 - (uint8_t)(127 - synth->mix); 
+	uint8_t osc2_vol = (uint8_t)(127 - synth->mix); 
 	
 	int16_t sample = MIX(VOLUME(osc1_out, osc1_vol), VOLUME(osc2_out, osc2_vol)); 
 	
 	// apply lfo oscillation
-	int8_t lfo_to_filt = LIMIT(-128, 127, (synth->lfo.output * synth->lfo_filt_amount) / 256);
-	int8_t lfo_to_osc 	= LIMIT(-128, 127, (synth->lfo.output * synth->lfo_osc_amount) / 256);
-	int8_t lfo_to_amp 	= LIMIT(-128, 127, (synth->lfo.output * synth->lfo_amp_amount) / 256);
-	synth->osc1.phase_acc += lfo_to_osc; 
-	synth->osc2.phase_acc += lfo_to_osc; 
+	int8_t lfo_to_filt = VOLUME(synth->lfo.output, synth->lfo_filt_amount);
+	int8_t lfo_to_osc 	= VOLUME(synth->lfo.output, synth->lfo_osc_amount);
+	int8_t lfo_to_amp 	= VOLUME(synth->lfo.output, synth->lfo_amp_amount);
+	synth->osc1.phase_acc += synth->increment_per_herz * lfo_to_osc; 
+	synth->osc2.phase_acc += synth->increment_per_herz * lfo_to_osc; 
+	
+	// adjust filter 
 	synth->filter.cutoff = LIMIT(0, 255, synth->preset_cutoff + lfo_to_filt); 
+	
+	// adjust amplifier
 	synth->amp.level = LIMIT(0, 255, synth->preset_amp_level + lfo_to_amp); 
 	
 	// pass through the effect buffer
