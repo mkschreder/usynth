@@ -72,9 +72,37 @@ static int SER_Read(int port, char *read_buffer, size_t max_chars_to_read)
 	return chars_read;
 }
 
+static int read_response(int port){
+	char buf; 
+	if(SER_Read(port, &buf, 1) == 1)
+		return buf; 
+	return -1; 
+}
+
+static int send_command(int port, synth_command_t cmd, uint8_t arg1, uint8_t arg2){
+	char buf[3]; 
+	buf[0] = cmd;
+	buf[1] = arg1;
+	buf[2] = arg2;
+	return SER_Write(port, buf, 3);
+}
+
+int U_SendRequest(handle_t h, uint8_t req, uint8_t arg){
+	usynth_interface_t *synth = (usynth_interface_t*)h; 
+	send_command(synth->serial_port, CMD_SYSTEM, req, arg); 
+	return 0; 
+}
+
 handle_t U_Open(){
 	usynth_interface_t *synth = malloc(sizeof(usynth_interface_t)); 
 	synth->serial_port = SER_Init(); 
+	
+	U_SendRequest(synth, REQ_PING, 0); 
+	if(read_response(synth->serial_port) != RESP_OK){
+		printf("Error connecting to synth!\n");
+	} else {
+		printf("Connected to synth!\n");
+	}
 	return synth; 
 }
 
@@ -83,29 +111,26 @@ void U_Close(handle_t h){
 	free(synth);
 }
 
-void U_NoteOn(handle_t h, uint8_t note, uint8_t velocity){
+int U_NoteOn(handle_t h, uint8_t note, uint8_t velocity){
 	usynth_interface_t *synth = (usynth_interface_t*)h; 
-	char buf[3]; 
-	buf[0] = '\x80';
-	buf[1] = note;
-	buf[2] = velocity;
-	SER_Write(synth->serial_port, buf, 3);
+	send_command(synth->serial_port, CMD_NOTE_ON, note, velocity); 
+	if(read_response(synth->serial_port) == RESP_OK)
+		return 0; 
+	return -1; 
 }
 
-void U_NoteOff(handle_t h, uint8_t note, uint8_t velocity){
-	usynth_interface_t *synth = (usynth_interface_t*)h; 
-	char buf[3]; 
-	buf[0] = '\x90';
-	buf[1] = note;
-	buf[2] = velocity;
-	SER_Write(synth->serial_port, buf, 3);
+int U_NoteOff(handle_t h, uint8_t note, uint8_t velocity){
+	usynth_interface_t *synth = (usynth_interface_t*)h;
+	send_command(synth->serial_port, CMD_NOTE_OFF, note, velocity); 
+	if(read_response(synth->serial_port) == RESP_OK)
+		return 0; 
+	return -1; 
 }
 
-void U_SetKnob(handle_t h, knob_t knob, int8_t value){
+int U_SetKnob(handle_t h, knob_t knob, int8_t value){
 	usynth_interface_t *synth = (usynth_interface_t*)h; 
-	char buf[3]; 
-	buf[0] = '\xb0';
-	buf[1] = knob; 
-	buf[2] = value; 
-	SER_Write(synth->serial_port, buf, 3); 
+	send_command(synth->serial_port, CMD_SET_KNOB, knob, value); 
+	if(read_response(synth->serial_port) == RESP_OK)
+		return 0; 
+	return -1; 
 }

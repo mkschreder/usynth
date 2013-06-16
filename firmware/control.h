@@ -2,6 +2,7 @@
 #define __UMIDI_H_
 
 #include <inttypes.h>
+#include "../driver/types.h"
 
 /** SERIAL COMMAND INTERFACE
  Note play: 
@@ -9,15 +10,8 @@
  - byte1: note 0..127
  - byte2: velocity (volume)
 */
-typedef enum {
-	CMD_NONE,
-	CMD_NOTE_ON = 0x80,
-	CMD_NOTE_OFF = 0x90,
-	CMD_SET_KNOB = 0xb0
-}midi_command_t; 
 
-
-typedef void (*midi_command_proc_t)(midi_command_t cmd, uint8_t b1, uint8_t b2, uint8_t b3); 
+typedef void (*midi_command_proc_t)(synth_command_t cmd, uint8_t b1, uint8_t b2, uint8_t b3); 
 
 typedef volatile struct midi_device_s {
 	midi_command_proc_t command_callback; 

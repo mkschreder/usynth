@@ -45,23 +45,25 @@ static uint16_t freeMem () {
 #define AUDIO_OUT(reg) BIT(D, 6, reg)
 
 static 
-void midi_command_proc(midi_command_t cmd, uint8_t byte0, uint8_t byte1, uint8_t byte2){
+void midi_command_proc(synth_command_t cmd, uint8_t byte0, uint8_t byte1, uint8_t byte2){
 	if(cmd == CMD_NOTE_ON){
 		cli(); 
 		U_PlayNoteRaw(&synth, byte0);
 		//U_PlayNote(&synth, 0, 3, 0);
 		sei(); 
-		uart_putchar('K');
+		UART_PutChar(RESP_OK);
 	} else if(cmd == CMD_NOTE_OFF){
 		cli();
 		U_ReleaseNoteRaw(&synth, byte0); 
 		sei();
-		uart_putchar('F');
+		UART_PutChar(RESP_OK);
 	} else if(cmd == CMD_SET_KNOB){
 		U_SetKnob(&synth, byte0, byte1); 
+		UART_PutChar(RESP_OK); 
+	} else if(cmd == CMD_SYSTEM) {
+		UART_PutChar(RESP_OK); 
 	} else {
-		uart_putchar('N');
-		uart_putchar(cmd);
+		UART_PutChar(RESP_ERROR);
 	}
 }
 
@@ -89,15 +91,15 @@ int main(void){
 	// turn on all ISRs
 	sei() ;
 	
-	printf("READY!\r\n");
+	//UART_PutChar(RESP_OK);
   ////////////////////////////////////////////////////
 
 	static midi_device_t midi; 
 	MIDI_Init(&midi); 
 	midi.command_callback = midi_command_proc; 
 	
-	static FILE out = FDEV_SETUP_STREAM(uart_putchar, NULL, _FDEV_SETUP_WRITE);
-	static FILE in = FDEV_SETUP_STREAM(NULL, uart_getchar, _FDEV_SETUP_READ);
+	static FILE out = FDEV_SETUP_STREAM(UART_PutChar, NULL, _FDEV_SETUP_WRITE);
+	static FILE in = FDEV_SETUP_STREAM(NULL, UART_GetChar, _FDEV_SETUP_READ);
 	stdout = &out; 
 	stdin = &in; 
 	
@@ -105,15 +107,19 @@ int main(void){
 		MIDI_Update(&midi); 
 		if(UCSR0A & _BV(RXC0)){
 			uint8_t b = UDR0;
-			if(MIDI_ProcessByte(&midi, b)){
+			if(MIDI_ProcessByte(&midi, b) == 0){
 				cli();
 				while(1){
-					if(UCSR0A & _BV(RXC0) && !MIDI_ProcessByte(&midi, UDR0))
+					if(UCSR0A & _BV(RXC0) && MIDI_ProcessByte(&midi, UDR0)){
 						break; 
-					if(MIDI_Update(&midi))
+					}
+					if(MIDI_Update(&midi) == -1){
+						//UART_PutChar(RESP_ERROR); 
 						break; 
+					}
 				}
 				sei();
+				//UART_PutChar(RESP_ERROR); 
 			}
 			//midi_device_process(&midi);
 			//uint8_t ch = getchar(); 

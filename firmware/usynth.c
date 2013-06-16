@@ -168,24 +168,14 @@ static int8_t FI_SimpleHP_Fast(fil_t *fi, int8_t sample){
 	return ((s - (FI_SimpleLP_Fast(fi, sample) + 127)) / 2) - 128;
 }
 */
-/*
+
 static int8_t FI_Distortion(fil_t *fi, int8_t x){
-	int16_t s = x; 
-	if(s < -30) s = -30; 
-	if(s > 30) s = 30; 
-	return x; 
-	
-	int16_t s = 0; 
-	for(uint8_t c = 0; c < 10; c++){
-		s += SIN((c * ((int16_t)x + 128)) & 0xff);
-	}
-	return s; 
-	float amount = 0.04; 
-	float in = x; 
+	float amount = 0.60; 
+	float in = ((float)x)/127.f; 
 	float k = 2*amount/(1-amount);
 
 	return 127 * (1+k)*in/(1+k*((in >= 0)?in:-in));
-}*/
+}
 
 
 static void OSC_Process(osc_t *osc) {
@@ -282,57 +272,8 @@ static void ENV_Process(env_t *env, uint8_t pressed){
 			env->state = 4; 
 		}
 	}
-	return; 
-	/* OLD EXPONENTIAL ENVELOPE
-	uint16_t a = (env->attack + env->decay);
-	if(env->time >= a + env->release) {
-		env->volume = 0; 
-		return; 
-	}
-	if(env->time == a && env->pressed){
-		env->volume = env->sustain; 
-		return; 
-	}
-	// if attack stage
-	if(env->time < env->attack){ // attack stage 0..attack
-		uint8_t frac = LIMIT(0, 255, (env->time * env->a_dx) / 256);
-		env->volume = LIMIT(0, 255, 255 - EXP(frac)); 
-	} else if(env->time < (env->attack + env->decay)){
-		uint8_t frac = LIMIT(0, 255, (env->time - env->attack) * env->d_dx / 256); 
-		env->volume = LIMIT(0, 255, env->sustain + SCALE(255 - env->sustain, EXP(frac))); 
-	} else if(env->time < (a + env->release)){
-		uint8_t frac = LIMIT(0, 255, ((env->time - a) * env->r_dx) / 256);
-		env->volume = SCALE(env->sustain, EXP(frac));
-	} else {
-		env->volume = 0; 
-	}
-	env->time++; */
 }
 
-/*
-static int16_t EFT_KarplusRun(eft_t *eft, int16_t sample){
-	const uint8_t j = eft->phase >> 12; 
-	const int8_t v = (int8_t) (eft->buf[j] >> 8);
-	const int16_t ret = v + 128;
-	const uint8_t next = (eft->phase + eft->phase_dx) >> 12; //bh!=N-1 ? bh+1 : 0;
-	register int32_t avg = (eft->buf[j] + (int32_t)eft->buf[next]) >> 1;
-	eft->buf[j] = avg;
-	eft->phase += eft->phase_dx; 
-	return ret;
-}
-
-static void EFT_KarplusReset(eft_t *eft){
-	for (uint8_t i=0; i!=33; i++)
-		eft->buf[i] = (int16_t) random(-32768,32767);
-	eft->phase = 0; 
-}
-
-void EFT_KarplusInit(eft_t *eft){
-	eft->run = EFT_KarplusRun; 
-	eft->reset = EFT_KarplusReset; 
-	EFT_KarplusReset(eft); 
-}
-*/
 void U_Init(synth_t *s, uint16_t sample_rate){
 	// first oscillator
 	s->osc1.detune = 0; 
@@ -360,11 +301,6 @@ void U_Init(synth_t *s, uint16_t sample_rate){
 	
 	s->filter.cutoff = 255; 
 	
-	//ENV_Setup(&s->filter_env, 32, 32, 0, 32); 
-	//ENV_Setup(&s->envelope, 2, 1, 255, 12);
-	//ENV_Setup(&s->envelope, 30, 30, 255, 30);
-	
-	//EFT_KarplusInit(&s->effect); 
 	s->sample_rate = sample_rate;
 	s->increment_per_herz = UINT_MAX / sample_rate; 
 	
@@ -507,121 +443,16 @@ void U_SetKnob(synth_t *synth, uint8_t knob, int8_t value){
 	}
 }
 
-#define saturate(x) MIN(MAX(-1.0,x),1.0)
-
-float BassBoosta(float sample)
-{
-static float selectivity, gain1, gain2, ratio, cap;
-gain1 = 1.0/(selectivity + 1.0);
-
-cap= (sample + cap*selectivity )*gain1;
-sample = saturate((sample + cap*ratio)*gain2);
-
-return sample;
-}
-
-float getPt( float n1 , float n2 , float perc )
-{
-    float diff = n2 - n1;
-
-    return n1 + ( diff * perc );
-}    
-
-void Bezier(float x1, float y1, float x2, float y2, float x3, float y3, float *x, float *y, float i){
-    // The Green Line
-    float xa = getPt( x1 , x2 , i );
-    float ya = getPt( y1 , y2 , i );
-    float xb = getPt( x2 , x3 , i );
-    float yb = getPt( y2 , y3 , i );
-
-    // The Black Dot
-    *x = getPt( xa , xb , i );
-    *y = getPt( ya , yb , i );
-}
-
-	fil_t fi; 
 // should be called once for each sample at the rate of samplerate
 uint8_t U_GenSample(synth_t *synth){
 	static uint16_t counter = 0; 
+	
+	// run envelope update every sample_rate/16 times per second
 	if((counter & 0xf) == 0){
 		ENV_Process(&synth->envelope, 1);
 		ENV_Process(&synth->filter_env, 0); 
 	}
 	counter++; 
-/*
-	static int16_t s = 0;  
-	static int incr = 1073; 
-	static uint16_t cr = 0; 
-	static volatile uint16_t p0 = 0, p1 = 64, p2 = 0, p3 = 0, fm = 0; 
-	uint16_t w0 = INCREMENT_FROM_FREQ(220) ;
-	uint16_t w1 = INCREMENT_FROM_FREQ(1000) ;
-	static volatile uint16_t w2 = INCREMENT_FROM_FREQ(880) ;
-	static volatile uint16_t w3 = INCREMENT_FROM_FREQ(1760) ;
-	if((cr++) == 10000){
-		incr+=20; 
-	}
-	if(incr == 2000) incr = 0; 
-	p0 += w0;// + SIN(p1 >> 8) * 16;
-	p1 += w1;
-	p2 += w2;
-	p3 += w3; */
-	// this mixing procedure works
-	//s = (SAWR(p0 >> 8) - SQUARE(p1 >> 8) - SIN(p2 >> 8) - SIN(p3 >> 8)) / 4;
-	//s = SQUARE(p0 >> 8);
-	
-	/*
-	static long vel = 0; 
-	static long pos = 0; 
-	if(s - pos < 0){
-		vel -= 10; 
-		pos += vel >> 5; 
-		s = pos; 
-	} else {
-		vel = 0; 
-		pos = s; 
-	} 
-	
-	float resonance = 0.4; 
-	
-	static int ss = 20; 
-	static float *buffer = 0;
-	if(!buffer) buffer = malloc(sizeof(float) * ss * 2 + 1); 
-	static float b[3]; 
-	static float y[3], out; 
-	static int ctr = 0, frac = 0;
-	if(ctr >= ss){
-		y[0] = out; 
-		y[1] = y[2]; 
-		y[2] = s; 
-		ctr = 0; 
-	} else {
-		ctr++; 
-	}
-	//buffer[ctr] = s; 
-	float x; 
-	Bezier(0, y[0], 1, y[1], 2, y[2], &x, &out, (float)ctr / (ss * 2.)); 
-	frac++;  
-	//s = out; 
-	//s = BassBoosta((float)s / 127.f) * 127.f; 
-	//s -= SIN(p1 >> 8) * resonance ;
-	//s = (int8_t)(s / 2); 
-	//s = (synth->envelope.volume * s) / 256; 
-	
-	static double fs = 0, fs1 = 0, fs2 = 0; 
-	float a = 0.8;
-	fs = (s * (1 - a)) + (fs * a); //= (fs2 + fs1 + fs + s) / 4; 
-	fs2 = fs1;
-	fs1 = fs; 
-	//fs = 0.2 * s + (1.0 - 0.2) * fs;
-	s = (int8_t) fs; //((fs + fs1 + fs2) / 3); 
-	synth->lowpass.cutoff = 10; //128 + synth->lfo.output; 
-	synth->lowpass.resonance = 0; 
-	fi.cutoff = 64; 
-	s = FI_Schroder(&fi, s); 
-	//s = FI_SimpleLP_Fast(&synth->lowpass, s) ;
-	//s = FI_SimpleLP_Fast(&synth->lowpass, s) * 4;
-	return s + 128;
-	*/
 	
 	// run the oscillators 
 	OSC_Process(&synth->osc1); 
@@ -658,6 +489,7 @@ uint8_t U_GenSample(synth_t *synth){
 	
 	// filter the signal through the filters
 	sample = FI_SimpleLP_Fast(&synth->filter, sample);
+	//sample = FI_Distortion(&synth->filter, sample); 
 	//sample = FI_Schroder(&synth->filter, sample);
 	//sample = FI_Distortion(0, sample); 
 	

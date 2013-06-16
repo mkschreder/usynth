@@ -104,8 +104,11 @@ void alarm_wakeup (int i)
 	
 	int flatness = ((note->length & 0xf0) == 0xf0)?(-1):(((note->length & 0xf0) == 0x10)?1:0);
 	int idx = NOTE_INDEX(note->note - 'a', note->octave - '0', flatness);
-	U_NoteOn(synth, idx, 255); 
-	printf("Play: %d\n", idx);
+	if(U_NoteOn(synth, idx, 255) == -1){
+		printf("Error while playing note!");
+	} else {
+		printf("Play: %d\n", idx);
+	}
 	
 	tout_val.it_value.tv_usec = 1000000 / (BPM / 60) / (note->length & 0x0f); 
 	setitimer(ITIMER_REAL, &tout_val,0);
@@ -244,7 +247,9 @@ int main()
 	note = (note_t*) melody;
 	
 	for(int c = 0; preset[c].knob != 99; c++){
-		U_SetKnob(synth, preset[c].knob, preset[c].value);
+		if(U_SetKnob(synth, preset[c].knob, preset[c].value)==-1){
+			printf("Could not set knob nr %d\n", preset[c].knob);
+		}
 	}
 	
   tout_val.it_interval.tv_sec = 0;

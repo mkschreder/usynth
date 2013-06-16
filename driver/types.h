@@ -38,4 +38,23 @@ typedef enum {
 	KB_OPTION_COUNT
 } knob_t; 
 
+typedef enum {
+	RESP_UNKNOWN, 
+	RESP_OK, 
+	RESP_ERROR
+} synth_response_t; 
+
+typedef enum {
+	REQ_UNKNOWN, 
+	REQ_PING = 128
+} synth_request_t; 
+
+typedef enum {
+	CMD_NONE,
+	CMD_NOTE_ON = 0x80,
+	CMD_NOTE_OFF = 0x90,
+	CMD_SET_KNOB = 0xb0, 
+	CMD_SYSTEM = 0xa0
+}synth_command_t; 
+
 #endif
