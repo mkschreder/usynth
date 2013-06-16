@@ -3,6 +3,8 @@ uSYNTH Basic
 
 uSynth delivers a complete analogue synthesizer in an 8kb package specifically designed for the AVR ATMega88 microcontroller. 
 
+![USynth](http://i.imgur.com/O5tNz3A.jpg)
+
 Functions include: 
 - 2 oscillator units with 5 waveforms each: left saw, right saw, triangle, square and sin
 - 1 low frequency oscillator for vibrato effects
@@ -26,7 +28,11 @@ INTERFACE
 
 uSynth firmware can be programmed over serial interface using a simple event based API. 
 
-	U_NoteOn(
+	handle_t U_Open(); // opens a connection to serial synth
+	void U_Close(handle_t h); // closes and frees all memory
+	void U_NoteOn(handle_t h, uint8_t note, uint8_t velocity); // play a midi note
+	void U_NoteOff(handle_t h, uint8_t note, uint8_t velocity); // release a midi note
+	void U_SetKnob(handle_t h, knob_t knob, int8_t value); // set a setting
 	
 Knobs
 -----
