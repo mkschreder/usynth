@@ -367,8 +367,6 @@ static void OSC_SetFrequencyFromNote(oscillator_t *osc, char note, int octave, u
 }
 */
 
-#include "midi/midi.h"
-
 static 
 void midi_command_proc(midi_command_t cmd, uint8_t byte0, uint8_t byte1, uint8_t byte2){
 	if(cmd == CMD_NOTE_ON){
