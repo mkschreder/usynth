@@ -13,7 +13,7 @@
 #include "local.h"
 #include "uart.h"
 #include "util.h"
-#include "../usynth.h"
+#include "../driver/types.h"
 #include "usynth.h"
 
 uint16_t rand();

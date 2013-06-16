@@ -170,12 +170,13 @@ static int8_t FI_SimpleHP_Fast(fil_t *fi, int8_t sample){
 	return ((s - (FI_SimpleLP_Fast(fi, sample) + 127)) / 2) - 128;
 }
 */
+/*
 static int8_t FI_Distortion(fil_t *fi, int8_t x){
 	int16_t s = x; 
 	if(s < -30) s = -30; 
 	if(s > 30) s = 30; 
 	return x; 
-	/*
+	
 	int16_t s = 0; 
 	for(uint8_t c = 0; c < 10; c++){
 		s += SIN((c * ((int16_t)x + 128)) & 0xff);
@@ -185,8 +186,8 @@ static int8_t FI_Distortion(fil_t *fi, int8_t x){
 	float in = x; 
 	float k = 2*amount/(1-amount);
 
-	return 127 * (1+k)*in/(1+k*((in >= 0)?in:-in));*/
-}
+	return 127 * (1+k)*in/(1+k*((in >= 0)?in:-in));
+}*/
 
 
 static void OSC_Process(osc_t *osc) {

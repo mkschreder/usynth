@@ -9,76 +9,19 @@
 #include <sys/time.h>
 #include <inttypes.h>
 
-#include "../usynth.h"
+#include "../driver/usynth.h"
 
 #define MAX_COMMAND_LENGTH 10
 
-static const char *PORT_NAME = "/dev/ttyUSB0";
-
-struct termios options_original;
 
 // Opens the USB serial port and continuously attempts to read from the port.
 // On receiving data, looks for a defined command.
 
-int SER_Init(){
-	struct termios options;
+handle_t synth; 
 
-  int serial_port = open(PORT_NAME, O_RDWR);
-
-  if (serial_port != -1)
-  {
-	  printf("Serial Port open\n");
-	  tcgetattr(serial_port,&options_original);
- 	  tcgetattr(serial_port, &options);
-	  cfsetispeed(&options, B9600);
-	  cfsetospeed(&options, B9600);
-	  
-	  options.c_cflag &= ~PARENB;  // N
-    options.c_cflag &= ~CSTOPB;  // 1
-    options.c_cflag &= ~CSIZE;
-    options.c_cflag |= CS8;      // 8
-    
-    //options.c_cflag |= CRTSCTS;   // no flow control
-    options.c_cflag |= CREAD | CLOCAL;  // turn on read & ignore ctrl lines
-    options.c_iflag &= ~(IXON | IXOFF | IXANY); // turn off s/w flow ctrl
-    options.c_lflag &= ~(ICANON | ECHO | ECHOE | ISIG); // make raw
-    //options.c_oflag &= ~OPOST; // make raw
-    
-	  tcsetattr(serial_port, TCSANOW, &options);
-  }
-  else
-	  printf("Unable to open /dev/ttyUSB0\n");
-  return (serial_port);
-}
-
-
-void SER_Close(int port)
-{
-	tcsetattr(port,TCSANOW,&options_original);
-	close(port);
-}
-
-int SER_Write(int port, const char *write_buffer, size_t size){
-	int bytes_written;
-	bytes_written = write(port, write_buffer, size);
-	if (bytes_written < size)
-	{
-		printf("Write failed \n");
-	}
-	return bytes_written;
-}
-
-int SER_Read(int port, char *read_buffer, size_t max_chars_to_read)
-{
-	int chars_read = read(port, read_buffer, max_chars_to_read);
-
-	return chars_read;
-}
-
-int port = 0; 
 void  sigint_handler(int sig)
 {
-	SER_Close(port);
+	U_Close(synth);
 	exit (sig);
 }
 
@@ -126,30 +69,6 @@ static const uint16_t NOTE_INDEX(int note, int octave, int detune){
 volatile note_t *note = 0; 
 
 #define BPM 60.0f
-
-void U_NoteOn(int port, uint8_t note, uint8_t velocity){
-	char buf[3]; 
-	buf[0] = '\x80';
-	buf[1] = note;
-	buf[2] = velocity;
-	SER_Write(port, buf, 3);
-}
-
-void U_NoteOff(int port, uint8_t note, uint8_t velocity){
-	char buf[3]; 
-	buf[0] = '\x90';
-	buf[1] = note;
-	buf[2] = velocity;
-	SER_Write(port, buf, 3);
-}
-
-void U_SetKnob(int port, knob_t knob, int8_t value){
-	char buf[3]; 
-	buf[0] = '\xb0';
-	buf[1] = knob; 
-	buf[2] = value; 
-	SER_Write(port, buf, 3); 
-}
 
 void alarm_wakeup (int i)
 {
@@ -262,7 +181,7 @@ int main()
 	int chars_read;
 	char read_buffer[MAX_COMMAND_LENGTH + 1] = {0};
 
-	port = SER_Init();
+	synth = U_Open();
 
 	if(port == -1) return 0; 
 	

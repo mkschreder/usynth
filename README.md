@@ -26,20 +26,13 @@ INTERFACE
 
 uSynth firmware can be programmed over serial interface using a simple event based API. 
 
-Commands
---------
-
-Commands consist of 3 bytes with first byte indicating the kind of command. 
-- 0x80: note on, second byte: note to play, third byte: note velocity (volume)
-- 0x90: note off, second byte: note to release, third byte: release velocity 
-- 0xb0: control, second byte: knob number, third byte: value
-
-Once the chip is initialized, it will start listening on the serial interface (RX pin) for commands. If no command is received for 200ms, the chip resets it's state and waits for the next command byte, followed by two other bytes. 
-
+	U_NoteOn(
+	
 Knobs
 -----
 
 The following knobs can be adjusted through the control api: 
+
 	U_SetKnob(s, KB_OSC1_WAVEFORM, WAVE_SIN);
 	U_SetKnob(s, KB_OSC1_DETUNE, 0);
 	U_SetKnob(s, KB_OSC1_FINE_TUNE, 0);

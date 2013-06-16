@@ -3,7 +3,7 @@
 
 #include <inttypes.h>
 #include <limits.h>
-#include "../usynth.h"
+#include "../driver/types.h"
 
 typedef volatile struct env_s{
 	// control variables
