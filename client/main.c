@@ -76,7 +76,7 @@ void alarm_wakeup (int i)
 	char buf[32]; 
 	int flatness = ((note->length & 0xf0) == 0xf0)?(-1):(((note->length & 0xf0) == 0x10)?1:0);
 	int idx = NOTE_INDEX(note->note - 'a', note->octave - '0', flatness);
-	U_NoteOn(port, idx, 255); 
+	U_NoteOn(synth, idx, 255); 
 	printf("Play: %d\n", idx);
 	
 	tout_val.it_value.tv_usec = 1000000 / (BPM / 60) / (note->length & 0x0f); 
@@ -183,7 +183,7 @@ int main()
 
 	synth = U_Open();
 
-	if(port == -1) return 0; 
+	if(synth == 0) return 0; 
 	
 	signal (SIGINT, (void*)sigint_handler);
 	
@@ -201,24 +201,21 @@ int main()
   sleep(1); 
   
   for(int c = 0; c< KB_OPTION_COUNT; c++){
-		U_SetKnob(port, preset[c].knob, preset[c].value);
+		U_SetKnob(synth, preset[c].knob, preset[c].value);
 	}
   
 	for (;;)
 	{
-		if (port != -1)
+		while(getchar() != '\n');
+		/*
+		int rs = SER_Read(port, read_buffer, MAX_COMMAND_LENGTH);
+		if (rs > 0)
 		{
-			while(getchar() != '\n');
-			/*
-			int rs = SER_Read(port, read_buffer, MAX_COMMAND_LENGTH);
-			if (rs > 0)
-			{
-				// Data was read.
-				printf("%s\r\n", read_buffer);
-				fflush(stdout);
-				//respond_to_command(read_buffer, chars_read);
-			}*/
-		}
+			// Data was read.
+			printf("%s\r\n", read_buffer);
+			fflush(stdout);
+			//respond_to_command(read_buffer, chars_read);
+		}*/
 		// The application can perform other tasks here.
 	}
 	return 0;

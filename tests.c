@@ -1,5 +1,5 @@
 #define _POSIX_C_SOURCE 199309L
-
+#include <inttypes.h>
 #include <stdio.h>
 #include <unistd.h>
 #include <string.h>
@@ -11,7 +11,6 @@
 #include <pulse/error.h>
 
 #include "firmware/usynth.h"
-#include "usynth.h"
 
 #define SAMPLE_RATE (65535 / 4)
 
