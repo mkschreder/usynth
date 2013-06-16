@@ -76,10 +76,10 @@ void init_test_sin(synth_t *s){
 	U_SetKnob(s, KB_LFO_TO_OSC, 0);
 	U_SetKnob(s, KB_LFO_TO_FILTER, 0);
 	U_SetKnob(s, KB_LFO_TO_AMP, 0);
-	U_SetKnob(s, KB_AMP_ENV_ATTACK, 0);
-	U_SetKnob(s, KB_AMP_ENV_DECAY, 127); 
+	U_SetKnob(s, KB_AMP_ENV_ATTACK, 10);
+	U_SetKnob(s, KB_AMP_ENV_DECAY, 8); 
 	U_SetKnob(s, KB_AMP_ENV_SUSTAIN, 127);
-	U_SetKnob(s, KB_AMP_ENV_RELEASE, 0);
+	U_SetKnob(s, KB_AMP_ENV_RELEASE, 64);
 	U_SetKnob(s, KB_FILTER_CUTOFF, 127); 
 	U_SetKnob(s, KB_FILTER_ENV_AMOUNT, 0);
 	U_SetKnob(s, KB_FILTER_ATTACK, 0);
@@ -104,9 +104,9 @@ void init_test_saw(synth_t *s){
 	U_SetKnob(s, KB_LFO_TO_FILTER, 0);
 	U_SetKnob(s, KB_LFO_TO_AMP, 0);
 	U_SetKnob(s, KB_AMP_ENV_ATTACK, 0);
-	U_SetKnob(s, KB_AMP_ENV_DECAY, 127); 
+	U_SetKnob(s, KB_AMP_ENV_DECAY, 0); 
 	U_SetKnob(s, KB_AMP_ENV_SUSTAIN, 127);
-	U_SetKnob(s, KB_AMP_ENV_RELEASE, 0);
+	U_SetKnob(s, KB_AMP_ENV_RELEASE, 127);
 	U_SetKnob(s, KB_FILTER_CUTOFF, 127); 
 	U_SetKnob(s, KB_FILTER_ENV_AMOUNT, 0);
 	U_SetKnob(s, KB_FILTER_ATTACK, 0);
@@ -349,7 +349,7 @@ void init_test_envelope(synth_t *s){
 	U_SetKnob(s, KB_LFO_TO_OSC, 0);
 	U_SetKnob(s, KB_LFO_TO_FILTER, 0);
 	U_SetKnob(s, KB_LFO_TO_AMP, 0);
-	U_SetKnob(s, KB_AMP_ENV_ATTACK, 16);
+	U_SetKnob(s, KB_AMP_ENV_ATTACK, 64);
 	U_SetKnob(s, KB_AMP_ENV_DECAY, 16); 
 	U_SetKnob(s, KB_AMP_ENV_SUSTAIN, 64);
 	U_SetKnob(s, KB_AMP_ENV_RELEASE, 32);

@@ -5,6 +5,12 @@
 #include <limits.h>
 #include "../driver/types.h"
 
+
+#define COUNTER_MAX 65535
+#define COUNTER_MIN 0
+
+#define SAMPLES_PER_SECOND (COUNTER_MAX / 4)
+
 typedef volatile struct env_s{
 	// control variables
 	uint8_t attack, decay, sustain, release; 
@@ -13,9 +19,10 @@ typedef volatile struct env_s{
 	uint8_t volume; 
 	
 	// private variables
-	uint16_t time; 
+	uint8_t state; 
+	//uint16_t time; 
 	uint16_t a_dx, d_dx, r_dx; 
-	uint16_t volume_acc; 
+	uint16_t a_acc, d_acc, r_acc; 
 	uint8_t 	pressed; 
 }env_t;
 
@@ -24,7 +31,6 @@ typedef volatile struct osc_s{
 	int8_t			detune; 			// detune ammount in semitones (12 semitones = 1 oct)
 	int8_t 		fine_tune; 		// fine tuning in Hz
 	int8_t 		phase_offset;
-	uint8_t 		lfo; 					// lfo ammount
 	int16_t		(*waveform)(uint8_t phase); // waveform 
 	
 	// outputs
@@ -87,8 +93,8 @@ typedef volatile struct synth_s{
 	uint8_t 		preset_cutoff; 
 	uint8_t 		preset_amp_level; 
 	
-	uint8_t 		sample_rate; 
-	uint8_t		increment_per_herz; 
+	uint16_t 	sample_rate; 
+	uint16_t		increment_per_herz; 
 	//eft_t				effect; 
 }synth_t; 
 

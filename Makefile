@@ -9,6 +9,10 @@ install:
 
 fuse:
 	make -C firmware fuse
+
+tests: 
+	make -C . all
+	./tests | sox -t raw -r 16384 -uLb 8 -c 1 - output.wav
 	
 clean:
 	make -C firmware clean

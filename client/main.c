@@ -51,7 +51,29 @@ const char *melody =
 	"g5\x18" "a4\x08" "c5\x04" "a4\x08" "c5\x08" "d5\x03"
 	"d5\x13" "d5\x03" "c5\x02"
 	"\0\0\0"; 
-
+/*
+static const char *melody = 
+	"c4\x08" "e4\x08" "g4\x08" "e5\x08"
+	"c4\x08" "e4\x08" "g4\x08" "e5\x08"
+	"c4\x08" "e4\x08" "g4\x08" "e5\x08"
+	"c4\x08" "e4\x08" "g4\x08" "e5\x08"
+	
+	"b4\x08" "d4\x08" "g4\x08" "c5\x08"
+	"b4\x08" "d4\x08" "g4\x08" "c5\x08"
+	"b4\x08" "d4\x08" "g4\x08" "c5\x08"
+	"b4\x08" "d4\x08" "g4\x08" "c5\x08"
+	
+	"f4\x08" "g4\x18" "c5\x08" "g5\x18"
+	"f4\x08" "g4\x18" "c5\x08" "g5\x18"
+	"f4\x08" "g4\x18" "c5\x08" "g5\x18"
+	"f4\x08" "g4\x18" "c5\x08" "g5\x18"
+	
+	"b4\x08" "d4\x08" "g4\x08" "c5\x08"
+	"b4\x08" "d4\x08" "g4\x08" "c5\x08"
+	"b4\x08" "d4\x08" "g4\x08" "b5\x08"
+	"b4\x08" "d4\x08" "g4\x08" "b5\x08"
+	"\0\0\0";
+*/
 typedef volatile struct  {
 	unsigned char note;
 	unsigned char octave;
@@ -74,6 +96,12 @@ void alarm_wakeup (int i)
 {
 	signal(SIGALRM, alarm_wakeup);
 	char buf[32]; 
+	
+	if(note->note == 0){
+	 note = (note_t*)melody; 
+	 sleep(3);
+	}
+	
 	int flatness = ((note->length & 0xf0) == 0xf0)?(-1):(((note->length & 0xf0) == 0x10)?1:0);
 	int idx = NOTE_INDEX(note->note - 'a', note->octave - '0', flatness);
 	U_NoteOn(synth, idx, 255); 
@@ -82,10 +110,7 @@ void alarm_wakeup (int i)
 	tout_val.it_value.tv_usec = 1000000 / (BPM / 60) / (note->length & 0x0f); 
 	setitimer(ITIMER_REAL, &tout_val,0);
 	note++; 
-	if(note->note == 0){
-	 note = (note_t*)melody; 
-	 sleep(1);
-	}
+	
 }
 
 typedef struct preset_s {
@@ -148,32 +173,61 @@ static preset_t preset_derren1[] = {
 }; 
 
 
-static preset_t preset[] = {
-	{KB_OSC1_WAVEFORM, WAVE_SAWL},
-	{KB_OSC1_DETUNE, 0},
+static preset_t preset_drum[] = {
+	{KB_OSC1_WAVEFORM, WAVE_SQUARE},
+	{KB_OSC1_DETUNE, -36},
 	{KB_OSC1_FINE_TUNE, 0},
 	{KB_OSC1_PHASE_OFFSET, 0},
-	{KB_OSC2_WAVEFORM, WAVE_SAWL},
-	{KB_OSC2_DETUNE, 0},
+	{KB_OSC2_WAVEFORM, WAVE_SIN},
+	{KB_OSC2_DETUNE, -36},
 	{KB_OSC2_FINE_TUNE, 0},
-	{KB_OSC2_PHASE_OFFSET, 0},
+	{KB_OSC2_PHASE_OFFSET, 23},
 	{KB_OSC_MIX_AMOUNT, 0},
-	{KB_LFO_SPEED, 8},
-	{KB_LFO_TO_OSC, 0},
-	{KB_LFO_TO_FILTER, 0},
-	{KB_LFO_TO_AMP, 0},
-	{KB_AMP_ENV_ATTACK, 20},
-	{KB_AMP_ENV_DECAY, 10}, 
-	{KB_AMP_ENV_SUSTAIN, 32},
-	{KB_AMP_ENV_RELEASE, 10},
-	{KB_FILTER_CUTOFF, 64}, 
+	{KB_LFO_SPEED, 1},
+	{KB_LFO_TO_OSC, 2},
+	{KB_LFO_TO_FILTER, 60},
+	{KB_LFO_TO_AMP, 20},
+	{KB_AMP_ENV_ATTACK, 0},
+	{KB_AMP_ENV_DECAY, 0}, 
+	{KB_AMP_ENV_SUSTAIN, 127},
+	{KB_AMP_ENV_RELEASE, 20},
+	{KB_FILTER_CUTOFF, 30}, 
 	{KB_FILTER_ENV_AMOUNT, 0},
 	{KB_FILTER_ATTACK, 0},
 	{KB_FILTER_DECAY, 0},
 	{KB_FILTER_SUSTAIN, 0},
 	{KB_FILTER_RELEASE, 0},
-	{KB_AMP_VOLUME,64},
-	{0, 0}
+	{KB_AMP_VOLUME,127},
+	{99, 0}
+}; 
+
+
+static preset_t preset[] = {
+	{KB_OSC1_WAVEFORM, WAVE_SQUARE},
+	{KB_OSC1_DETUNE, -36},
+	{KB_OSC1_FINE_TUNE, 0},
+	{KB_OSC1_PHASE_OFFSET, 0},
+	{KB_OSC2_WAVEFORM, WAVE_SIN},
+	{KB_OSC2_DETUNE, -36},
+	{KB_OSC2_FINE_TUNE, 0},
+	{KB_OSC2_PHASE_OFFSET, 23},
+	{KB_OSC_MIX_AMOUNT, 0},
+	{KB_LFO_SPEED, 1},
+	{KB_LFO_TO_OSC, 2},
+	{KB_LFO_TO_FILTER, 60},
+	{KB_LFO_TO_AMP, 20},
+	{KB_AMP_ENV_ATTACK, 1},
+	{KB_AMP_ENV_DECAY, 20}, 
+	{KB_AMP_ENV_SUSTAIN, 0},
+	{KB_AMP_ENV_RELEASE, 20},
+	{KB_FILTER_CUTOFF, 30}, 
+	{KB_FILTER_ENV_AMOUNT, 0},
+	{KB_FILTER_ATTACK, 0},
+	{KB_FILTER_DECAY, 0},
+	{KB_FILTER_SUSTAIN, 0},
+	{KB_FILTER_RELEASE, 0},
+	{KB_AMP_VOLUME,127},
+	{99, 0}
 }; 
 
 int main()
@@ -189,6 +243,9 @@ int main()
 	
 	note = (note_t*) melody;
 	
+	for(int c = 0; preset[c].knob != 99; c++){
+		U_SetKnob(synth, preset[c].knob, preset[c].value);
+	}
 	
   tout_val.it_interval.tv_sec = 0;
   tout_val.it_interval.tv_usec = 0;
@@ -199,11 +256,7 @@ int main()
   signal(SIGALRM,alarm_wakeup); /* set the Alarm signal capture */
   
   sleep(1); 
-  
-  for(int c = 0; c< KB_OPTION_COUNT; c++){
-		U_SetKnob(synth, preset[c].knob, preset[c].value);
-	}
-  
+ 
 	for (;;)
 	{
 		while(getchar() != '\n');

@@ -3,10 +3,6 @@
 
 #define BUFSIZE 1024
 
-#define COUNTER_MAX 65535
-#define COUNTER_MIN 0
-
-#define SAMPLES_PER_SECOND (COUNTER_MAX / 4)
 #define INCREMENT_FROM_FREQ(q, rate) (uint16_t)((COUNTER_MAX / rate) * (q)) 
 
 
@@ -14,7 +10,8 @@
 #ifndef MAX
 #define MAX(x, y) (((x) > (y))?(x):(y))
 #endif
-int16_t LIMIT(int16_t bottom, int16_t top, int16_t variable){
+
+int32_t LIMIT(int32_t bottom, int32_t top, int32_t variable){
 	return MAX(bottom, MIN(top, variable));
 }
 
@@ -23,7 +20,8 @@ int16_t VOLUME(int16_t sample, uint8_t vol){
 }
 
 int16_t SCALE(int16_t a, uint8_t parts){
-	return (a * parts) / 256;
+	int32_t mul = (int32_t)a * parts; 
+	return mul / 256;
 }
 
 int16_t MIX(int16_t a, int16_t b){
@@ -42,7 +40,7 @@ int16_t MIX(int16_t a, int16_t b){
 
 static const int8_t sineTable[256] PSTORE = {0, 3, 6, 9, 12, 16, 19, 22, 25, 28, 31, 34, 37, 40, 43, 46, 49, 51, 54, 57, 60, 63, 65, 68, 71, 73, 76, 78, 81, 83, 85, 88, 90, 92, 94, 96, 98, 100, 102, 104, 106, 107, 109, 111, 112, 113, 115, 116, 117, 118, 120, 121, 122, 122, 123, 124, 125, 125, 126, 126, 126, 127, 127, 127, 127, 127, 127, 127, 126, 126, 126, 125, 125, 124, 123, 122, 122, 121, 120, 118, 117, 116, 115, 113, 112, 111, 109, 107, 106, 104, 102, 100, 98, 96, 94, 92, 90, 88, 85, 83, 81, 78, 76, 73, 71, 68, 65, 63, 60, 57, 54, 51, 49, 46, 43, 40, 37, 34, 31, 28, 25, 22, 19, 16, 12, 9, 6, 3, 0, -3, -6, -9, -12, -16, -19, -22, -25, -28, -31, -34, -37, -40, -43, -46, -49, -51, -54, -57, -60, -63, -65, -68, -71, -73, -76, -78, -81, -83, -85, -88, -90, -92, -94, -96, -98, -100, -102, -104, -106, -107, -109, -111, -112, -113, -115, -116, -117, -118, -120, -121, -122, -122, -123, -124, -125, -125, -126, -126, -126, -127, -127, -127, -127, -127, -127, -127, -126, -126, -126, -125, -125, -124, -123, -122, -122, -121, -120, -118, -117, -116, -115, -113, -112, -111, -109, -107, -106, -104, -102, -100, -98, -96, -94, -92, -90, -88, -85, -83, -81, -78, -76, -73, -71, -68, -65, -63, -60, -57, -54, -51, -49, -46, -43, -40, -37, -34, -31, -28, -25, -22, -19, -16, -12, -9, -6, -3 };
 
-
+/*
 static const uint8_t expTable[64] PSTORE = {255, 235, 217, 201, 186, 171, 158, 146, 135, 125, 115, 107, 98, 91, 84, 77, 71, 66, 61, 56, 52, 48, 44, 41, 37, 35, 32, 29, 27, 25, 23, 21, 19, 18, 16, 15, 14, 13, 11, 11, 10, 9, 8, 7, 7, 6, 5, 5, 4, 4, 4, 3, 3, 3, 2, 2, 2, 1, 1, 1, 1, 1, 0, 0};
 
 // linear approximation between the missing points
@@ -54,7 +52,7 @@ static const uint8_t EXP(uint8_t x){
 	uint8_t i2 = ((x >> 1) & 1)?(dy >> 1):0;
 	uint8_t i1 = (x & 1)?(dy >> 2):0;
 	return expTable[i] - i2 - i1; 
-}
+}*/
 
 static const int note_freq[] PROGMEM = {
 // c    c#   d   d#    e    f   f#    g    g#   a   a#     b
@@ -137,9 +135,9 @@ static int16_t FI_SimpleLP_Fast(fil_t *fi, int16_t sample){
 #define MIN(x, y) (((x) < (y))?(x):(y))
 #define MAX(x, y) (((x) > (y))?(x):(y))
 
-/*
+
 // the Schroder filter - a fast, enhanced lowpass filter
-static int16_t FI_Schroder(fil_t *fi, int16_t sample) {
+/*static int16_t FI_Schroder(fil_t *fi, int16_t sample) {
 	 if(sample - fi->pos < 0){
 		fi->vel -= (255 - fi->cutoff) >> 1; 
 		fi->pos += fi->vel / 128; 
@@ -206,28 +204,42 @@ static void OSC_Reset(osc_t *osc){
 }
 
 static void ENV_Reset(env_t *env){
-	env->time = 0; 
+	//env->time = 0; 
 	env->pressed = 0; 
 	env->volume = 0; 
+	env->state = 0; 
+	
+	env->a_acc = 0; //UINT16_MAX - (env->volume << 8); //UINT16_MAX;
+	env->d_acc = 0; //UINT16_MAX;
+	env->r_acc = 0; //UINT16_MAX; 
+}
+
+static void ENV_Recalculate(env_t *env){
+	env->a_dx = (!env->attack)?SAMPLES_PER_SECOND:SAMPLES_PER_SECOND / env->attack;
+	env->d_dx = (!env->decay)?SAMPLES_PER_SECOND:SAMPLES_PER_SECOND / env->decay;
+	env->d_dx = SCALE(env->d_dx, 255 - env->sustain); 
+	env->r_dx = (!env->release)?SAMPLES_PER_SECOND:SAMPLES_PER_SECOND / env->release;
+	env->r_dx = SCALE(env->r_dx, env->sustain); 
 }
 
 static void ENV_SetAttackTime(env_t *env, uint8_t a){
 	env->attack = a;
-	env->a_dx = (!a)?0:UINT16_MAX/a;
+	ENV_Recalculate(env); 
 }
 
 static void ENV_SetDecayTime(env_t *env, uint8_t d){
 	env->decay = d;
-	env->d_dx = (!d)?0:UINT16_MAX/d;
+	ENV_Recalculate(env); 
 }
 
 static void ENV_SetSustainLevel(env_t *env, uint8_t s){
 	env->sustain = s; 
+	ENV_Recalculate(env); 
 }
 
 static void ENV_SetReleaseTime(env_t *env, uint8_t r){
 	env->release = r;
-	env->r_dx = (!r)?0:UINT16_MAX/r;
+	ENV_Recalculate(env); 
 }
 
 /*
@@ -242,6 +254,36 @@ static void ENV_Setup(env_t *env, uint8_t a, uint8_t d, uint8_t s, uint8_t r){
 
 // should be called at 64 times per second relative to sample rate
 static void ENV_Process(env_t *env, uint8_t pressed){
+	if(env->state == 0){
+		if(UINT16_MAX - env->a_dx < env->a_acc) env->a_acc = UINT16_MAX; 
+		else env->a_acc = env->a_acc + env->a_dx; 
+		env->volume = (env->a_acc >> 8); 
+		if(env->a_acc == UINT16_MAX) env->state = 1; 
+	} 
+	else if(env->state == 1){ // decay
+		if(UINT16_MAX - env->d_dx < env->d_acc) env->d_acc = UINT16_MAX; 
+		else env->d_acc = env->d_acc + env->d_dx; 
+		//env->d_acc = LIMIT(0, UINT16_MAX, env->d_acc + env->d_dx); 
+		env->volume = 255 - (env->d_acc >> 8); 
+		if(env->volume < env->sustain){
+			env->state = 2; 
+			env->volume = env->sustain; 
+		}
+	}
+	else if(env->state == 2){ // sustain
+		if(!env->pressed) env->state = 3; 
+	}
+	else if(env->state == 3){
+		if(UINT16_MAX - env->r_dx < env->r_acc) env->r_acc = UINT16_MAX; 
+		else env->r_acc = env->r_acc + env->r_dx; 
+		//env->r_acc = LIMIT(0, UINT16_MAX, env->r_acc + env->r_dx); 
+		env->volume = LIMIT(0, 255, env->sustain - (env->r_acc >> 8)); 
+		if(env->volume == 0){
+			env->state = 4; 
+		}
+	}
+	return; 
+	/* OLD EXPONENTIAL ENVELOPE
 	uint16_t a = (env->attack + env->decay);
 	if(env->time >= a + env->release) {
 		env->volume = 0; 
@@ -264,7 +306,7 @@ static void ENV_Process(env_t *env, uint8_t pressed){
 	} else {
 		env->volume = 0; 
 	}
-	env->time++; 
+	env->time++; */
 }
 
 /*
@@ -296,13 +338,11 @@ void U_Init(synth_t *s, uint16_t sample_rate){
 	s->osc1.detune = 0; 
 	s->osc1.fine_tune = 0; 
 	s->osc1.waveform = NOISE; 
-	s->osc1.lfo = 0; 
 	s->osc1.phase_dx = 0; 
 	s->osc1.phase_offset = 0; 
 	
 	s->osc2.detune = 0; 
 	s->osc2.fine_tune = 0; 
-	s->osc2.lfo = 0; 
 	s->osc2.waveform = NOISE; 
 	s->osc2.phase_dx = 0; 
 	s->osc2.phase_offset = 0; 
@@ -343,8 +383,8 @@ void U_PlayNoteRaw(synth_t *s, uint8_t note){
 	uint16_t fq = S_FrequencyFromIndex(note + s->osc1.detune);
 	s->osc1.phase_dx = (fq + s->osc1.fine_tune) * s->increment_per_herz; 
 	
-	fq = S_FrequencyFromIndex(note + s->osc1.detune);
-	s->osc2.phase_dx = (fq + s->osc1.fine_tune) * s->increment_per_herz; 
+	fq = S_FrequencyFromIndex(note + s->osc2.detune);
+	s->osc2.phase_dx = (fq + s->osc2.fine_tune) * s->increment_per_herz; 
 	
 	s->envelope.pressed = 1; 
 }
@@ -389,6 +429,8 @@ void U_SetKnob(synth_t *synth, uint8_t knob, int8_t value){
 				synth->osc1.waveform = SAWR;
 			else if(value == WAVE_TRIANGLE)
 				synth->osc1.waveform = TRIANGLE;
+			else if(value == WAVE_NOISE)
+				synth->osc1.waveform = NOISE; 
 			break; 
 		case KB_OSC1_DETUNE:
 			synth->osc1.detune = value;
@@ -410,6 +452,8 @@ void U_SetKnob(synth_t *synth, uint8_t knob, int8_t value){
 				synth->osc2.waveform = SAWR;
 			else if(value == WAVE_TRIANGLE)
 				synth->osc2.waveform = TRIANGLE;
+			else if(value == WAVE_NOISE)
+				synth->osc2.waveform = NOISE; 
 			break; 
 		case KB_OSC2_DETUNE: 
 			synth->osc2.detune = value; 
@@ -499,12 +543,12 @@ void Bezier(float x1, float y1, float x2, float y2, float x3, float y3, float *x
 // should be called once for each sample at the rate of samplerate
 uint8_t U_GenSample(synth_t *synth){
 	static uint16_t counter = 0; 
-	if((counter & 0xff) == 0){
+	if((counter & 0xf) == 0){
 		ENV_Process(&synth->envelope, 1);
 		ENV_Process(&synth->filter_env, 0); 
 	}
 	counter++; 
-	/*
+/*
 	static int16_t s = 0;  
 	static int incr = 1073; 
 	static uint16_t cr = 0; 
@@ -614,7 +658,7 @@ uint8_t U_GenSample(synth_t *synth){
 	
 	// filter the signal through the filters
 	sample = FI_SimpleLP_Fast(&synth->filter, sample);
-	//sample = FI_Schroder(&synth->lowpass, sample);
+	//sample = FI_Schroder(&synth->filter, sample);
 	//sample = FI_Distortion(0, sample); 
 	
 	// amplify the signal with the output amp

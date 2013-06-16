@@ -11,29 +11,33 @@ void MIDI_Init(midi_device_t *dev){
 	dev->command_callback = 0; 
 }
 
-void MIDI_Update(midi_device_t *dev){
+int MIDI_Update(midi_device_t *dev){
 	if(dev->_timeout > 10000){
 		dev->_state = STATE_READY;
 		dev->_timeout = 0; 
+		return 1; 
 	}
 	dev->_timeout++; 
+	return 0; 
 }
 
-void MIDI_ProcessByte(midi_device_t *dev, uint8_t byte){
+int MIDI_ProcessByte(midi_device_t *dev, uint8_t byte){
 	if(dev->_state == STATE_READY){
 		dev->_cmd = byte; 
 		dev->_state = STATE_RX1;
 		dev->_timeout = 0; 
-	}
-	else if(dev->_state == STATE_RX1){ // || dev->_state == STATE_RX2){
-		dev->_data[dev->_state - STATE_RX1] = byte; 
-		dev->_state++; 
+		return 1; 
+	} else if(dev->_state == STATE_RX1){ // || dev->_state == STATE_RX2){
+		dev->_data[0] = byte; 
+		dev->_state = STATE_RX2; 
 		dev->_timeout = 0; 
+		return 1; 
 	} else if(dev->_state == STATE_RX2){
 		if(dev->command_callback){
 			dev->command_callback(dev->_cmd, dev->_data[0], byte, 0); 
 		}
 		dev->_state = STATE_READY; 
+		return 0; 
 	}
 }
 

@@ -21,9 +21,6 @@ gui:
 install:
 	$(AVRDUDE) -U flash:w:$(APP).hex 
 
-test: 
-	make -C .
-	./tests | sox -t raw -r 16384 -uLb 8 -c 1 - output.wav
 
 # Fuse high byte:
 # 0xc9 = 1 1 0 1   1 1 1 1 <-- BOOTRST (boot reset vector at 0x0000)

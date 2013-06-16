@@ -30,7 +30,7 @@ typedef volatile struct midi_device_s {
 } midi_device_t; 
 
 void MIDI_Init(midi_device_t *dev); 
-void MIDI_Update(midi_device_t *dev); 
-void MIDI_ProcessByte(midi_device_t *dev, uint8_t byte); 
+int MIDI_Update(midi_device_t *dev); 
+int MIDI_ProcessByte(midi_device_t *dev, uint8_t byte); 
 
 #endif
